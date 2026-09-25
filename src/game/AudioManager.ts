@@ -1,13 +1,15 @@
 export class AudioManager {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = false;
+  private isMusicEnabled: boolean = true;
+  private isSoundEnabled: boolean = true;
   private masterGain: GainNode | null = null;
   private musicGain: GainNode | null = null;
   private sfxGain: GainNode | null = null;
   private isInitialized: boolean = false;
-  private bgOscillatorNode: OscillatorNode | null = null;
   private isMusicPlaying: boolean = false;
   private musicIntervalId: number | null = null;
+  private beatStep: number = 0;
 
   constructor() {
     // Initialized on first user interaction
@@ -29,16 +31,15 @@ export class AudioManager {
       this.masterGain.connect(this.ctx.destination);
 
       this.musicGain = this.ctx.createGain();
-      this.musicGain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+      this.musicGain.gain.setValueAtTime(this.isMusicEnabled ? 0.35 : 0.0001, this.ctx.currentTime);
       this.musicGain.connect(this.masterGain);
 
       this.sfxGain = this.ctx.createGain();
-      this.sfxGain.gain.setValueAtTime(0.6, this.ctx.currentTime);
+      this.sfxGain.gain.setValueAtTime(this.isSoundEnabled ? 0.6 : 0.0001, this.ctx.currentTime);
       this.sfxGain.connect(this.masterGain);
 
       this.isInitialized = true;
 
-      // Resume context if suspended
       if (this.ctx.state === 'suspended') {
         this.ctx.resume().catch((e) => console.warn('Audio resume deferred:', e));
       }
@@ -76,18 +77,43 @@ export class AudioManager {
     return this.isMuted;
   }
 
+  public setMusicEnabled(enabled: boolean): void {
+    this.isMusicEnabled = enabled;
+    if (this.musicGain && this.ctx) {
+      const targetGain = enabled ? 0.35 : 0.0001;
+      this.musicGain.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.musicGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.05);
+    }
+  }
+
+  public setSoundEnabled(enabled: boolean): void {
+    this.isSoundEnabled = enabled;
+    if (this.sfxGain && this.ctx) {
+      const targetGain = enabled ? 0.6 : 0.0001;
+      this.sfxGain.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.sfxGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.05);
+    }
+  }
+
+  public getIsMusicEnabled(): boolean {
+    return this.isMusicEnabled;
+  }
+
+  public getIsSoundEnabled(): boolean {
+    return this.isSoundEnabled;
+  }
+
   /**
    * Play crystal clear coin pickup chime
    */
   public playCoinSound(): void {
-    if (this.isMuted || !this.ctx || !this.sfxGain) return;
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
       osc.type = 'sine';
-      // Arpeggiated high tone
       osc.frequency.setValueAtTime(987.77, now); // B5
       osc.frequency.exponentialRampToValueAtTime(1318.51, now + 0.08); // E6
 
@@ -99,8 +125,120 @@ export class AudioManager {
 
       osc.start(now);
       osc.stop(now + 0.25);
-    } catch (e) {
-      console.warn('Sound play error:', e);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Play Power-Up collection fanfare
+   */
+  public playPowerUpSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+      notes.forEach((freq, idx) => {
+        if (!this.ctx || !this.sfxGain) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const start = now + idx * 0.06;
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, start);
+
+        gain.gain.setValueAtTime(0.35, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.18);
+
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+
+        osc.start(start);
+        osc.stop(start + 0.18);
+      });
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Play Energy Shield absorbing damage
+   */
+  public playShieldAbsorbSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(650, now);
+      osc.frequency.exponentialRampToValueAtTime(120, now + 0.22);
+
+      gain.gain.setValueAtTime(0.4, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now);
+      osc.stop(now + 0.25);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Play Coin Multiplier activation chime
+   */
+  public playMultiplierSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.linearRampToValueAtTime(1760, now + 0.15);
+
+      gain.gain.setValueAtTime(0.3, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now);
+      osc.stop(now + 0.2);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Play landing impact sound
+   */
+  public playLandingSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(130, now);
+      osc.frequency.exponentialRampToValueAtTime(50, now + 0.08);
+
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now);
+      osc.stop(now + 0.09);
+    } catch {
+      // Audio fallback
     }
   }
 
@@ -108,7 +246,7 @@ export class AudioManager {
    * Play lane shift / dash swoosh
    */
   public playLaneSwitchSound(): void {
-    if (this.isMuted || !this.ctx || !this.sfxGain) return;
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
@@ -126,7 +264,7 @@ export class AudioManager {
 
       osc.start(now);
       osc.stop(now + 0.12);
-    } catch (e) {
+    } catch {
       // Audio fallback
     }
   }
@@ -135,7 +273,7 @@ export class AudioManager {
    * Play dynamic jump swoosh sound
    */
   public playJumpSound(): void {
-    if (this.isMuted || !this.ctx || !this.sfxGain) return;
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
@@ -168,7 +306,7 @@ export class AudioManager {
    * Play slide skid sound
    */
   public playSlideSound(): void {
-    if (this.isMuted || !this.ctx || !this.sfxGain) return;
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
@@ -195,10 +333,9 @@ export class AudioManager {
    * Play heavy impact / collision sound
    */
   public playCrashSound(): void {
-    if (this.isMuted || !this.ctx || !this.sfxGain) return;
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const now = this.ctx.currentTime;
-      // Low thud
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
@@ -223,7 +360,7 @@ export class AudioManager {
    * Play blaster projectile firing sound
    */
   public playShootSound(): void {
-    if (this.isMuted || !this.ctx || !this.sfxGain) return;
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
@@ -250,7 +387,7 @@ export class AudioManager {
    * Play projectile hit impact on enemy
    */
   public playHitSound(): void {
-    if (this.isMuted || !this.ctx || !this.sfxGain) return;
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
@@ -277,10 +414,9 @@ export class AudioManager {
    * Play enemy destruction / explosion sound
    */
   public playDefeatSound(): void {
-    if (this.isMuted || !this.ctx || !this.sfxGain) return;
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const now = this.ctx.currentTime;
-      // Multi-tone burst
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
@@ -306,7 +442,7 @@ export class AudioManager {
    * Play player taking damage alarm
    */
   public playPlayerDamageSound(): void {
-    if (this.isMuted || !this.ctx || !this.sfxGain) return;
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
@@ -334,7 +470,7 @@ export class AudioManager {
    * Play weapon magazine reload recharge sound
    */
   public playReloadSound(): void {
-    if (this.isMuted || !this.ctx || !this.sfxGain) return;
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
@@ -361,7 +497,7 @@ export class AudioManager {
    * Play game over defeat jingle
    */
   public playGameOverSound(): void {
-    if (this.isMuted || !this.ctx || !this.sfxGain) return;
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const now = this.ctx.currentTime;
       const notes = [349.23, 311.13, 261.63, 196.0]; // F4 -> Eb4 -> C4 -> G3
@@ -392,7 +528,7 @@ export class AudioManager {
    * Play UI button click feedback
    */
   public playClickSound(): void {
-    if (this.isMuted || !this.ctx || !this.sfxGain) return;
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
@@ -410,7 +546,7 @@ export class AudioManager {
 
       osc.start(now);
       osc.stop(now + 0.05);
-    } catch (e) {
+    } catch {
       // Audio fallback
     }
   }
@@ -419,7 +555,7 @@ export class AudioManager {
    * Play Game Start fanfare
    */
   public playStartSound(): void {
-    if (this.isMuted || !this.ctx || !this.sfxGain) return;
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const notes = [440, 554.37, 659.25, 880];
       const now = this.ctx.currentTime;
@@ -441,56 +577,102 @@ export class AudioManager {
         osc.start(startTime);
         osc.stop(startTime + 0.2);
       });
-    } catch (e) {
+    } catch {
       // Audio fallback
     }
   }
 
   /**
-   * Ambient synth pulse music loop using Web Audio API synthesis
+   * Energetic cyber runner procedural soundtrack engine
+   * Rhythmic bassline and synth arpeggios synced to gameplay
    */
   public startAmbientMusic(): void {
-    if (this.isMusicPlaying || !this.ctx || !this.musicGain) return;
+    if (!this.init()) return;
+    if (this.isMusicPlaying) return;
+
     this.isMusicPlaying = true;
+    this.beatStep = 0;
 
-    // Bassline rhythm pattern
-    const pattern = [110, 110, 130.81, 146.83, 110, 164.81, 146.83, 130.81];
-    let step = 0;
+    // 125 BPM = 120ms per 16th note step
+    const stepDurationMs = 120;
 
-    const playStep = () => {
-      if (!this.isMusicPlaying || !this.ctx || !this.musicGain || this.isMuted) return;
+    const bassNotes = [110, 110, 130.81, 110, 98, 98, 123.47, 98]; // A2, C3, G2, B2
+    const leadNotes = [440, 523.25, 659.25, 783.99, 659.25, 523.25, 440, 392];
+
+    this.musicIntervalId = window.setInterval(() => {
+      if (!this.ctx || !this.musicGain || !this.isMusicEnabled || this.isMuted) return;
+
       try {
         const now = this.ctx.currentTime;
-        const osc = this.ctx.createOscillator();
-        const filter = this.ctx.createBiquadFilter();
-        const gain = this.ctx.createGain();
+        const step = this.beatStep % 16;
+        this.beatStep++;
 
-        const freq = pattern[step % pattern.length];
-        step++;
+        // 1. Kick/Sub pulse on beats 0, 4, 8, 12
+        if (step % 4 === 0) {
+          const kickOsc = this.ctx.createOscillator();
+          const kickGain = this.ctx.createGain();
+          kickOsc.type = 'sine';
+          kickOsc.frequency.setValueAtTime(140, now);
+          kickOsc.frequency.exponentialRampToValueAtTime(38, now + 0.08);
 
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(freq, now);
+          kickGain.gain.setValueAtTime(0.25, now);
+          kickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
 
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(500, now);
-        filter.frequency.exponentialRampToValueAtTime(200, now + 0.2);
+          kickOsc.connect(kickGain);
+          kickGain.connect(this.musicGain);
 
-        gain.gain.setValueAtTime(0.12, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+          kickOsc.start(now);
+          kickOsc.stop(now + 0.1);
+        }
 
-        osc.connect(filter);
-        filter.connect(gain);
-        gain.connect(this.musicGain);
+        // 2. Synth Bass Arp on every 2nd step
+        if (step % 2 === 0) {
+          const noteIdx = Math.floor(step / 2) % bassNotes.length;
+          const bassFreq = bassNotes[noteIdx];
 
-        osc.start(now);
-        osc.stop(now + 0.25);
+          const bassOsc = this.ctx.createOscillator();
+          const bassFilter = this.ctx.createBiquadFilter();
+          const bGain = this.ctx.createGain();
+
+          bassOsc.type = 'sawtooth';
+          bassOsc.frequency.setValueAtTime(bassFreq, now);
+
+          bassFilter.type = 'lowpass';
+          bassFilter.frequency.setValueAtTime(320, now);
+
+          bGain.gain.setValueAtTime(0.12, now);
+          bGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+          bassOsc.connect(bassFilter);
+          bassFilter.connect(bGain);
+          bGain.connect(this.musicGain);
+
+          bassOsc.start(now);
+          bassOsc.stop(now + 0.14);
+        }
+
+        // 3. Shimmering lead note on select steps
+        if (step === 2 || step === 7 || step === 10 || step === 14) {
+          const leadFreq = leadNotes[(step + Math.floor(this.beatStep / 16)) % leadNotes.length];
+          const leadOsc = this.ctx.createOscillator();
+          const lGain = this.ctx.createGain();
+
+          leadOsc.type = 'triangle';
+          leadOsc.frequency.setValueAtTime(leadFreq, now);
+
+          lGain.gain.setValueAtTime(0.08, now);
+          lGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+          leadOsc.connect(lGain);
+          lGain.connect(this.musicGain);
+
+          leadOsc.start(now);
+          leadOsc.stop(now + 0.18);
+        }
       } catch {
-        // Fallback
+        // Safe synth fallback
       }
-    };
-
-    // 130 BPM = ~230ms per 8th note
-    this.musicIntervalId = window.setInterval(playStep, 230);
+    }, stepDurationMs);
   }
 
   public stopAmbientMusic(): void {

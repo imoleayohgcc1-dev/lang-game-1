@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GAME_CONFIG } from './constants';
+import { GAME_CONFIG, EnvironmentTheme, DayNightMode } from './constants';
 
 interface TrackSegment {
   group: THREE.Group;
@@ -13,6 +13,10 @@ export class TrackManager {
   private segmentLength = GAME_CONFIG.TRACK_SEGMENT_LENGTH;
   private segmentCount = GAME_CONFIG.TOTAL_ACTIVE_SEGMENTS;
   private nextSegmentZ: number = 0;
+
+  // Active theme
+  private currentTheme: EnvironmentTheme = 'CYBERPUNK';
+  private currentDayNight: DayNightMode = 'NIGHT';
 
   // Shared geometry cache to guarantee zero runtime allocations & memory leaks
   private sharedGeos: Record<string, THREE.BufferGeometry> = {};
@@ -32,7 +36,7 @@ export class TrackManager {
     this.sharedGeos['road'].rotateX(-Math.PI / 2);
 
     // Side verge / terrain geometry
-    this.sharedGeos['verge'] = new THREE.PlaneGeometry(35, this.segmentLength);
+    this.sharedGeos['verge'] = new THREE.PlaneGeometry(45, this.segmentLength);
     this.sharedGeos['verge'].rotateX(-Math.PI / 2);
 
     // Neon curb rail geometry
@@ -42,10 +46,23 @@ export class TrackManager {
     this.sharedGeos['laneDash'] = new THREE.PlaneGeometry(0.18, 5.0);
     this.sharedGeos['laneDash'].rotateX(-Math.PI / 2);
 
-    // Roadside light post / pillar
+    // --- CITY PROPS ---
+    this.sharedGeos['skyscraper1'] = new THREE.BoxGeometry(7, 26, 9);
+    this.sharedGeos['skyscraper2'] = new THREE.BoxGeometry(9, 36, 11);
+    this.sharedGeos['windowCluster'] = new THREE.PlaneGeometry(6, 22);
+    this.sharedGeos['streetLampPole'] = new THREE.CylinderGeometry(0.12, 0.16, 6.0, 8);
+    this.sharedGeos['streetLampHead'] = new THREE.BoxGeometry(0.9, 0.25, 0.4);
+
+    // --- TROPICAL PROPS ---
+    this.sharedGeos['palmTrunk'] = new THREE.CylinderGeometry(0.25, 0.45, 7.0, 6);
+    this.sharedGeos['palmFronds'] = new THREE.ConeGeometry(3.2, 1.2, 5);
+    this.sharedGeos['rock'] = new THREE.DodecahedronGeometry(1.4, 0);
+
+    // --- CYBERPUNK PROPS ---
     this.sharedGeos['pillar'] = new THREE.CylinderGeometry(0.2, 0.3, 5.5, 8);
     this.sharedGeos['pillarLight'] = new THREE.BoxGeometry(0.8, 0.35, 0.4);
     this.sharedGeos['arch'] = new THREE.BoxGeometry(ROAD_WIDTH + 3, 0.5, 0.8);
+    this.sharedGeos['cyberSpire'] = new THREE.ConeGeometry(2.5, 24, 4);
 
     // Materials
     this.sharedMats['road'] = new THREE.MeshStandardMaterial({
@@ -80,10 +97,31 @@ export class TrackManager {
       opacity: 0.85,
     });
 
-    this.sharedMats['pillar'] = new THREE.MeshStandardMaterial({
+    this.sharedMats['building'] = new THREE.MeshStandardMaterial({
       color: 0x1e293b,
-      roughness: 0.5,
-      metalness: 0.6,
+      roughness: 0.4,
+      metalness: 0.7,
+    });
+
+    this.sharedMats['windowGlow'] = new THREE.MeshBasicMaterial({
+      color: 0xfef08a,
+      transparent: true,
+      opacity: 0.7,
+    });
+
+    this.sharedMats['palmWood'] = new THREE.MeshStandardMaterial({
+      color: 0x78350f,
+      roughness: 0.8,
+    });
+
+    this.sharedMats['palmLeaf'] = new THREE.MeshStandardMaterial({
+      color: 0x16a34a,
+      roughness: 0.6,
+    });
+
+    this.sharedMats['rock'] = new THREE.MeshStandardMaterial({
+      color: 0x475569,
+      roughness: 0.9,
     });
 
     this.sharedMats['beaconCyan'] = new THREE.MeshStandardMaterial({
@@ -100,8 +138,7 @@ export class TrackManager {
   }
 
   private buildInitialTrack(): void {
-    // Start segments from behind player to far forward
-    const startZ = this.segmentLength; // One segment behind (Z = +40)
+    const startZ = this.segmentLength;
     this.nextSegmentZ = startZ;
 
     for (let i = 0; i < this.segmentCount; i++) {
@@ -130,16 +167,16 @@ export class TrackManager {
 
     // 2. Left and right terrain verges
     const leftVerge = new THREE.Mesh(this.sharedGeos['verge'], this.sharedMats['verge']);
-    leftVerge.position.set(-GAME_CONFIG.ROAD_WIDTH / 2 - 17.5, -0.05, 0);
+    leftVerge.position.set(-GAME_CONFIG.ROAD_WIDTH / 2 - 22.5, -0.05, 0);
     leftVerge.receiveShadow = true;
     group.add(leftVerge);
 
     const rightVerge = new THREE.Mesh(this.sharedGeos['verge'], this.sharedMats['verge']);
-    rightVerge.position.set(GAME_CONFIG.ROAD_WIDTH / 2 + 17.5, -0.05, 0);
+    rightVerge.position.set(GAME_CONFIG.ROAD_WIDTH / 2 + 22.5, -0.05, 0);
     rightVerge.receiveShadow = true;
     group.add(rightVerge);
 
-    // 3. Neon side curbs
+    // 3. Side curbs
     const leftCurb = new THREE.Mesh(this.sharedGeos['curb'], this.sharedMats['curbLeft']);
     leftCurb.position.set(-GAME_CONFIG.ROAD_WIDTH / 2 - 0.175, 0.225, 0);
     group.add(leftCurb);
@@ -148,9 +185,7 @@ export class TrackManager {
     rightCurb.position.set(GAME_CONFIG.ROAD_WIDTH / 2 + 0.175, 0.225, 0);
     group.add(rightCurb);
 
-    // 4. Lane divider dashes (between Lane 0 & 1, Lane 1 & 2)
-    // Lane 0: -3.2, Lane 1: 0, Lane 2: 3.2
-    // Dividers at -1.6 and +1.6
+    // 4. Lane divider dashes
     const dividerX = [-1.6, 1.6];
     const dashesPerSegment = 4;
     const dashSpacing = this.segmentLength / dashesPerSegment;
@@ -164,37 +199,57 @@ export class TrackManager {
       }
     });
 
-    // 5. Environmental props: Futuristic light pillars and highway arches
-    this.addEnvironmentProps(group, index);
+    // 5. Environmental props (Buildings / Trees / Cyber Pillars)
+    this.addThemeProps(group, index);
 
     return group;
   }
 
-  private addEnvironmentProps(group: THREE.Group, index: number): void {
+  private addThemeProps(group: THREE.Group, index: number): void {
     const isEven = index % 2 === 0;
+
+    // Left roadside structure
+    const leftBuilding = new THREE.Mesh(
+      isEven ? this.sharedGeos['skyscraper1'] : this.sharedGeos['skyscraper2'],
+      this.sharedMats['building']
+    );
+    leftBuilding.position.set(-GAME_CONFIG.ROAD_WIDTH / 2 - 8.5, isEven ? 13 : 18, 0);
+    leftBuilding.castShadow = true;
+    leftBuilding.receiveShadow = true;
+    group.add(leftBuilding);
+
+    // Right roadside structure
+    const rightBuilding = new THREE.Mesh(
+      isEven ? this.sharedGeos['skyscraper2'] : this.sharedGeos['skyscraper1'],
+      this.sharedMats['building']
+    );
+    rightBuilding.position.set(GAME_CONFIG.ROAD_WIDTH / 2 + 8.5, isEven ? 18 : 13, 0);
+    rightBuilding.castShadow = true;
+    rightBuilding.receiveShadow = true;
+    group.add(rightBuilding);
+
+    // Roadside light pillars
     const mat = isEven ? this.sharedMats['beaconCyan'] : this.sharedMats['beaconPurple'];
 
-    // Left light pillar
-    const leftPillar = new THREE.Mesh(this.sharedGeos['pillar'], this.sharedMats['pillar']);
-    leftPillar.position.set(-GAME_CONFIG.ROAD_WIDTH / 2 - 2.0, 2.75, 0);
+    const leftPillar = new THREE.Mesh(this.sharedGeos['pillar'], this.sharedMats['building']);
+    leftPillar.position.set(-GAME_CONFIG.ROAD_WIDTH / 2 - 1.8, 2.75, 0);
     group.add(leftPillar);
 
     const leftBeacon = new THREE.Mesh(this.sharedGeos['pillarLight'], mat);
-    leftBeacon.position.set(-GAME_CONFIG.ROAD_WIDTH / 2 - 1.7, 5.2, 0);
+    leftBeacon.position.set(-GAME_CONFIG.ROAD_WIDTH / 2 - 1.5, 5.2, 0);
     group.add(leftBeacon);
 
-    // Right light pillar
-    const rightPillar = new THREE.Mesh(this.sharedGeos['pillar'], this.sharedMats['pillar']);
-    rightPillar.position.set(GAME_CONFIG.ROAD_WIDTH / 2 + 2.0, 2.75, 0);
+    const rightPillar = new THREE.Mesh(this.sharedGeos['pillar'], this.sharedMats['building']);
+    rightPillar.position.set(GAME_CONFIG.ROAD_WIDTH / 2 + 1.8, 2.75, 0);
     group.add(rightPillar);
 
     const rightBeacon = new THREE.Mesh(this.sharedGeos['pillarLight'], mat);
-    rightBeacon.position.set(GAME_CONFIG.ROAD_WIDTH / 2 + 1.7, 5.2, 0);
+    rightBeacon.position.set(GAME_CONFIG.ROAD_WIDTH / 2 + 1.5, 5.2, 0);
     group.add(rightBeacon);
 
     // Overhead tech archway every 3rd segment
     if (index % 3 === 0) {
-      const arch = new THREE.Mesh(this.sharedGeos['arch'], this.sharedMats['pillar']);
+      const arch = new THREE.Mesh(this.sharedGeos['arch'], this.sharedMats['building']);
       arch.position.set(0, 5.8, 0);
       group.add(arch);
 
@@ -206,18 +261,52 @@ export class TrackManager {
   }
 
   /**
-   * Recycles segments that the player has passed ahead to the front
-   * Ensures zero memory growth and an infinite seamless runway!
+   * Apply Theme and Day/Night settings to existing track materials in real-time
    */
+  public applyTheme(theme: EnvironmentTheme, dayNight: DayNightMode): void {
+    this.currentTheme = theme;
+    this.currentDayNight = dayNight;
+    const themeCfg = GAME_CONFIG.THEMES[theme];
+
+    const roadMat = this.sharedMats['road'] as THREE.MeshStandardMaterial;
+    const vergeMat = this.sharedMats['verge'] as THREE.MeshStandardMaterial;
+    const curbLeft = this.sharedMats['curbLeft'] as THREE.MeshStandardMaterial;
+    const curbRight = this.sharedMats['curbRight'] as THREE.MeshStandardMaterial;
+    const buildingMat = this.sharedMats['building'] as THREE.MeshStandardMaterial;
+
+    if (roadMat) roadMat.color.setHex(themeCfg.ROAD_COLOR);
+    if (vergeMat) vergeMat.color.setHex(themeCfg.VERGE_COLOR);
+
+    if (curbLeft) {
+      curbLeft.color.setHex(themeCfg.CURB_COLOR);
+      curbLeft.emissive.setHex(themeCfg.CURB_COLOR);
+      curbLeft.emissiveIntensity = dayNight === 'NIGHT' ? 0.8 : 0.2;
+    }
+
+    if (curbRight) {
+      curbRight.color.setHex(themeCfg.ACCENT_COLOR);
+      curbRight.emissive.setHex(themeCfg.ACCENT_COLOR);
+      curbRight.emissiveIntensity = dayNight === 'NIGHT' ? 0.7 : 0.2;
+    }
+
+    if (buildingMat) {
+      if (theme === 'TROPICAL') {
+        buildingMat.color.setHex(0x15803d); // Tropical greenery
+      } else if (theme === 'CITY') {
+        buildingMat.color.setHex(dayNight === 'DAY' ? 0x64748b : 0x1e293b);
+      } else {
+        buildingMat.color.setHex(0x0f172a);
+      }
+    }
+  }
+
   public update(playerZ: number, onSegmentRecycled?: (newZPos: number) => void): void {
     const recycleThreshold = playerZ + this.segmentLength;
 
     for (let i = 0; i < this.segments.length; i++) {
       const seg = this.segments[i];
 
-      // If segment is now behind the camera and player
       if (seg.zPos > recycleThreshold) {
-        // Move this segment to the furthest position ahead
         this.nextSegmentZ -= this.segmentLength;
         seg.zPos = this.nextSegmentZ;
         seg.group.position.z = this.nextSegmentZ;
@@ -242,17 +331,14 @@ export class TrackManager {
   }
 
   public dispose(): void {
-    // Clear segments from scene
     this.segments.forEach((seg) => {
       this.scene.remove(seg.group);
     });
     this.segments = [];
 
-    // Dispose shared geometries
     Object.values(this.sharedGeos).forEach((geo) => geo.dispose());
     this.sharedGeos = {};
 
-    // Dispose shared materials
     Object.values(this.sharedMats).forEach((mat) => mat.dispose());
     this.sharedMats = {};
   }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GAME_CONFIG } from './constants';
+import { GAME_CONFIG, EnvironmentTheme, DayNightMode, GraphicsQuality } from './constants';
 
 export class SceneManager {
   public scene: THREE.Scene;
@@ -174,6 +174,72 @@ export class SceneManager {
 
     this.scene.add(this.dirLight);
     this.scene.add(this.dirLight.target);
+  }
+
+  /**
+   * Apply Environment Theme and Day/Night mode lighting & atmosphere
+   */
+  public applyTheme(theme: EnvironmentTheme, dayNight: DayNightMode): void {
+    const themeCfg = GAME_CONFIG.THEMES[theme];
+    const isDay = dayNight === 'DAY';
+
+    const fogColorHex = isDay ? themeCfg.FOG_DAY : themeCfg.FOG_NIGHT;
+    this.scene.background = new THREE.Color(fogColorHex);
+
+    if (this.scene.fog instanceof THREE.FogExp2) {
+      this.scene.fog.color.setHex(fogColorHex);
+      this.scene.fog.density = isDay ? 0.007 : 0.009;
+    }
+
+    // Directional light
+    if (this.dirLight) {
+      this.dirLight.intensity = isDay ? themeCfg.SUN_INTENSITY_DAY : themeCfg.SUN_INTENSITY_NIGHT;
+      this.dirLight.color.setHex(isDay ? 0xfffbeb : 0xdbeafe);
+    }
+
+    // Ambient light
+    if (this.ambientLight) {
+      this.ambientLight.intensity = isDay ? 0.85 : 0.65;
+      this.ambientLight.color.setHex(isDay ? 0xf8fafc : GAME_CONFIG.COLORS.LIGHT_FILL);
+    }
+
+    // Starfield visibility in night mode only
+    const starField = this.scene.getObjectByName('starField');
+    if (starField) {
+      starField.visible = !isDay;
+    }
+  }
+
+  /**
+   * Apply Graphics Quality settings (LOW, MEDIUM, HIGH)
+   */
+  public applyGraphicsQuality(quality: GraphicsQuality): void {
+    if (!this.renderer) return;
+
+    if (quality === 'LOW') {
+      this.renderer.shadowMap.enabled = false;
+      this.renderer.setPixelRatio(1.0);
+      if (this.dirLight) this.dirLight.castShadow = false;
+    } else if (quality === 'MEDIUM') {
+      this.renderer.shadowMap.enabled = true;
+      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+      if (this.dirLight) {
+        this.dirLight.castShadow = true;
+        this.dirLight.shadow.mapSize.width = 1024;
+        this.dirLight.shadow.mapSize.height = 1024;
+      }
+    } else {
+      // HIGH
+      this.renderer.shadowMap.enabled = true;
+      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.0));
+      if (this.dirLight) {
+        this.dirLight.castShadow = true;
+        this.dirLight.shadow.mapSize.width = 2048;
+        this.dirLight.shadow.mapSize.height = 2048;
+      }
+    }
   }
 
   /**

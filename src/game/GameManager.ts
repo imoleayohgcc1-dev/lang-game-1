@@ -1,5 +1,11 @@
 import * as THREE from 'three';
-import { GAME_CONFIG, GameState, PlayerState } from './constants';
+import {
+  GAME_CONFIG,
+  GameState,
+  PlayerState,
+  GameSettings,
+  DEFAULT_SETTINGS,
+} from './constants';
 import { GameStateManager } from './GameStateManager';
 import { SceneManager } from './SceneManager';
 import { Player } from './Player';
@@ -8,6 +14,12 @@ import { CoinManager, CoinInstance } from './CoinManager';
 import { ObstacleManager, ObstacleInstance } from './ObstacleManager';
 import { ProjectileManager, ProjectileInstance } from './ProjectileManager';
 import { EnemyManager, EnemyInstance } from './EnemyManager';
+import { PowerUpManager, ActivePowerUpState } from './PowerUpManager';
+import { VFXManager } from './VFXManager';
+import { AchievementManager, Achievement } from './AchievementManager';
+import { TemporaryMessageManager, TemporaryMessageState, MessageType } from './TemporaryMessageManager';
+import { LanguageChallengeManager } from './language/LanguageChallengeManager';
+import { LanguageCode, LanguageChallengeState, LearningItem, LearningProgress, LanguageDifficulty, AITeacherStatus } from './language/types';
 import { CameraController } from './CameraController';
 import { InputManager } from './InputManager';
 import { AudioManager } from './AudioManager';
@@ -26,11 +38,21 @@ export interface GameMetrics {
   maxAmmo: number;
   isReloading: boolean;
   hasTargetLock: boolean;
+  targetEnemyName?: string;
+  activePowerUps: ActivePowerUpState[];
+  currentMessage?: TemporaryMessageState | null;
+  languageChallenge?: {
+    state: LanguageChallengeState;
+    item: LearningItem | null;
+    progress: LearningProgress;
+    aiTeacherStatus?: AITeacherStatus;
+  };
 }
 
 export type MetricsCallback = (metrics: GameMetrics) => void;
 
 const HIGH_SCORE_KEY = 'language_runner_high_score';
+const SETTINGS_STORAGE_KEY = 'language_runner_settings';
 
 export class GameManager {
   public stateManager: GameStateManager;
@@ -41,9 +63,17 @@ export class GameManager {
   public obstacleManager: ObstacleManager;
   public projectileManager: ProjectileManager;
   public enemyManager: EnemyManager;
+  public powerUpManager: PowerUpManager;
+  public vfxManager: VFXManager;
+  public achievementManager: AchievementManager;
+  public messageManager: TemporaryMessageManager;
+  public languageManager: LanguageChallengeManager;
   public cameraController: CameraController;
   public inputManager: InputManager;
   public audioManager: AudioManager;
+
+  // Settings
+  public settings: GameSettings;
 
   // Runtime metrics
   public score: number = 0;
@@ -61,6 +91,9 @@ export class GameManager {
   public reloadTimer: number = 0;
   private fireCooldownTimer: number = 0;
   public currentTargetEnemy: EnemyInstance | null = null;
+
+  // Stats for achievements
+  private enemiesDefeatedCount: number = 0;
 
   // Reusable vectors for performance
   private tempMuzzlePos: THREE.Vector3 = new THREE.Vector3();
@@ -81,6 +114,7 @@ export class GameManager {
   constructor(container: HTMLElement, onMetricsUpdate?: MetricsCallback) {
     this.onMetricsUpdate = onMetricsUpdate;
     this.highScore = this.loadHighScore();
+    this.settings = this.loadSettings();
 
     // 1. Initialize Subsystems
     this.stateManager = new GameStateManager('LOADING');
@@ -100,8 +134,17 @@ export class GameManager {
     this.obstacleManager = new ObstacleManager(this.sceneManager.scene);
     this.projectileManager = new ProjectileManager(this.sceneManager.scene);
     this.enemyManager = new EnemyManager(this.sceneManager.scene);
+    this.powerUpManager = new PowerUpManager(this.sceneManager.scene);
+    this.vfxManager = new VFXManager(this.sceneManager.scene);
+    this.achievementManager = new AchievementManager();
+    this.messageManager = new TemporaryMessageManager();
+    this.messageManager.onMessageChanged = () => this.broadcastMetrics();
+    this.languageManager = new LanguageChallengeManager();
     this.cameraController = new CameraController(this.sceneManager.camera);
     this.inputManager = new InputManager(container);
+
+    // Apply loaded settings
+    this.applySettings(this.settings);
 
     this.setupHooks();
 
@@ -111,6 +154,37 @@ export class GameManager {
     // Set to READY state once fully loaded
     this.stateManager.setState('READY');
     this.broadcastMetrics();
+  }
+
+  private loadSettings(): GameSettings {
+    try {
+      const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (stored) {
+        return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+      }
+    } catch {
+      // Fallback
+    }
+    return { ...DEFAULT_SETTINGS };
+  }
+
+  public saveSettings(newSettings: GameSettings): void {
+    this.settings = newSettings;
+    try {
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
+    } catch {
+      // Fallback
+    }
+    this.applySettings(newSettings);
+  }
+
+  public applySettings(settings: GameSettings): void {
+    this.sceneManager.applyTheme(settings.theme, settings.dayNight);
+    this.sceneManager.applyGraphicsQuality(settings.graphicsQuality);
+    this.trackManager.applyTheme(settings.theme, settings.dayNight);
+    this.vfxManager.setQuality(settings.graphicsQuality);
+    this.audioManager.setMusicEnabled(settings.musicEnabled);
+    this.audioManager.setSoundEnabled(settings.soundEnabled);
   }
 
   private loadHighScore(): number {
@@ -151,25 +225,59 @@ export class GameManager {
 
     // 2. Track recycling hook: spawn new coins ahead
     this.trackManager.update(this.player.position.z, (newZPos) => {
-      if (Math.random() > 0.3) {
-        this.coinManager.populateTrackSection(newZPos, 3);
+      if (Math.random() > 0.25) {
+        this.coinManager.populateTrackSection(newZPos);
       }
     });
 
     // 3. Coin collection hook
-    this.coinManager.onCoinCollected = (_coin: CoinInstance) => {
-      this.coins += 1;
-      this.score += GAME_CONFIG.COIN_VALUE;
+    this.coinManager.onCoinCollected = (coin: CoinInstance) => {
+      const multiplier = this.powerUpManager.getCoinMultiplier();
+      const earnedCoins = 1 * multiplier;
+      this.coins += earnedCoins;
+      this.score += GAME_CONFIG.COIN_VALUE * multiplier;
+
       this.audioManager.playCoinSound();
+      this.vfxManager.triggerCoinCollect(coin.mesh.position);
+
+      if (this.coins >= 50) {
+        this.achievementManager.unlock('COIN_COLLECTOR');
+      }
+
       this.broadcastMetrics();
     };
 
-    // 4. Obstacle collision hook
+    // 4. PowerUp collection hook
+    this.powerUpManager.onPowerUpCollected = (type, _duration) => {
+      this.audioManager.playPowerUpSound();
+      const cfg = GAME_CONFIG.POWERUPS.TYPES[type];
+      this.vfxManager.triggerPowerUpCollect(this.player.position, cfg.COLOR);
+
+      if (type === 'SHIELD') {
+        this.player.setShieldActive(true);
+      } else if (type === 'MAGNET') {
+        this.player.setMagnetActive(true);
+      }
+
+      this.achievementManager.unlock('POWER_SURGE');
+      this.broadcastMetrics();
+    };
+
+    this.powerUpManager.onPowerUpExpired = (type) => {
+      if (type === 'SHIELD') {
+        this.player.setShieldActive(false);
+      } else if (type === 'MAGNET') {
+        this.player.setMagnetActive(false);
+      }
+      this.broadcastMetrics();
+    };
+
+    // 5. Obstacle collision hook
     this.obstacleManager.onCollision = (_obstacle: ObstacleInstance) => {
       this.handlePlayerCollisionDamage();
     };
 
-    // 5. Enemy hooks
+    // 6. Enemy hooks
     this.enemyManager.onEnemySpawned = (enemy: EnemyInstance) => {
       this.onEnemySpawned?.(enemy);
     };
@@ -181,12 +289,40 @@ export class GameManager {
     this.enemyManager.onEnemyDefeated = (enemy: EnemyInstance) => {
       this.score += enemy.scoreReward;
       this.coins += enemy.coinReward;
+      this.enemiesDefeatedCount++;
+
       this.audioManager.playDefeatSound();
+      this.vfxManager.triggerEnemyDefeat(enemy.mesh.position);
       this.onEnemyDefeated?.(enemy);
+
+      if (this.enemiesDefeatedCount >= 10) {
+        this.achievementManager.unlock('CYBER_DEFENDER');
+      }
+
       this.broadcastMetrics();
     };
 
-    // 6. State changes
+    // 7. Language challenge hooks
+    this.languageManager.onChallengeStateChanged = () => {
+      this.broadcastMetrics();
+    };
+
+    this.languageManager.onProgressUpdated = () => {
+      this.broadcastMetrics();
+    };
+
+    this.languageManager.onAITeacherStatusChanged = () => {
+      this.broadcastMetrics();
+    };
+
+    this.languageManager.onLanguageChallengeCompleted = (_item, rewardCoins, _rewardXP) => {
+      this.coins += rewardCoins;
+      this.score += rewardCoins * 10;
+      this.audioManager.playCoinSound();
+      this.broadcastMetrics();
+    };
+
+    // 8. State changes
     this.stateManager.subscribe((newState) => {
       if (newState === 'PLAYING') {
         this.audioManager.startAmbientMusic();
@@ -244,9 +380,6 @@ export class GameManager {
     return false;
   }
 
-  /**
-   * Shoot a laser projectile towards enemies with target assistance
-   */
   public shoot(): boolean {
     if (!this.stateManager.isPlaying() || this.player.state === 'DEAD') {
       return false;
@@ -265,26 +398,19 @@ export class GameManager {
       return false;
     }
 
-    // Spend ammunition
     this.ammo -= 1;
     this.fireCooldownTimer = GAME_CONFIG.COMBAT.FIRE_COOLDOWN;
 
-    // Locate muzzle position from player weapon
     this.player.getMuzzleWorldPosition(this.tempMuzzlePos);
 
-    // Target assist search
     const bestTarget = this.enemyManager.findBestTarget(
       this.player.position,
       this.player.currentLaneIndex
     );
 
-    // Spawn projectile in 3D scene
     this.projectileManager.spawn(this.tempMuzzlePos, this.tempForwardDir, bestTarget);
-
-    // Sound effect
     this.audioManager.playShootSound();
 
-    // Automatic reload trigger on empty magazine
     if (this.ammo <= 0) {
       this.triggerReload();
     }
@@ -309,6 +435,15 @@ export class GameManager {
       return;
     }
 
+    // Shield check: protects player from 1 hit!
+    if (this.powerUpManager.consumeShield()) {
+      this.player.setShieldActive(false);
+      this.audioManager.playShieldAbsorbSound();
+      this.player.triggerDamage(0.6); // brief invulnerability flash
+      this.broadcastMetrics();
+      return;
+    }
+
     this.health = Math.max(0, this.health - amount);
     this.audioManager.playPlayerDamageSound();
     this.player.triggerDamage();
@@ -316,11 +451,11 @@ export class GameManager {
     this.onPlayerHealthChanged?.(this.health, this.maxHealth);
 
     if (this.health <= 0) {
-      // Game Over sequence
       this.player.die();
       this.audioManager.playCrashSound();
       this.audioManager.playGameOverSound();
       this.saveHighScore(this.score);
+      this.achievementManager.unlock('FIRST_RUN');
       this.stateManager.setState('GAME_OVER');
     }
 
@@ -328,11 +463,10 @@ export class GameManager {
   }
 
   private seedInitialCoins(): void {
-    // Seed clusters of coins down the track ahead of player
-    this.coinManager.populateTrackSection(-15, 3);
-    this.coinManager.populateTrackSection(-48, 4);
-    this.coinManager.populateTrackSection(-85, 3);
-    this.coinManager.populateTrackSection(-120, 4);
+    this.coinManager.populateTrackSection(-15, 'STRAIGHT');
+    this.coinManager.populateTrackSection(-48, 'CURVE');
+    this.coinManager.populateTrackSection(-85, 'JUMP_PATH');
+    this.coinManager.populateTrackSection(-120, 'ZIGZAG');
   }
 
   public startGame(): void {
@@ -361,6 +495,20 @@ export class GameManager {
     }
   }
 
+  public showMessage(
+    text: string,
+    duration: number = 3000,
+    type: MessageType = 'gameplay',
+    priority: number = 1,
+    subtext?: string
+  ): void {
+    this.messageManager.showMessage(text, duration, type, priority, subtext);
+  }
+
+  public hideMessage(): void {
+    this.messageManager.hideMessage();
+  }
+
   public restart(): void {
     this.score = 0;
     this.coins = 0;
@@ -376,16 +524,19 @@ export class GameManager {
     this.player.reset();
     this.obstacleManager.reset();
     this.enemyManager.reset();
+    this.powerUpManager.reset();
     this.projectileManager.reset();
     this.trackManager.reset();
     this.coinManager.reset();
+    this.vfxManager.reset();
+    this.messageManager.reset();
+    this.languageManager.reset();
     this.cameraController.reset(this.player.position);
     this.sceneManager.updateLightPosition(0);
 
     this.seedInitialCoins();
     this.broadcastMetrics();
 
-    // Start playing immediately on restart
     this.startGame();
   }
 
@@ -404,9 +555,13 @@ export class GameManager {
     this.player.reset();
     this.obstacleManager.reset();
     this.enemyManager.reset();
+    this.powerUpManager.reset();
     this.projectileManager.reset();
     this.trackManager.reset();
     this.coinManager.reset();
+    this.vfxManager.reset();
+    this.messageManager.reset();
+    this.languageManager.reset();
     this.cameraController.reset(this.player.position);
     this.sceneManager.updateLightPosition(0);
 
@@ -419,7 +574,6 @@ export class GameManager {
   private gameLoop = (currentTime: number): void => {
     this.animationFrameId = requestAnimationFrame(this.gameLoop);
 
-    // Delta time in seconds with safe ceiling (prevents huge delta on tab unfocus)
     const rawDelta = (currentTime - this.lastTime) / 1000;
     const delta = Math.min(rawDelta, 0.08);
     this.lastTime = currentTime;
@@ -428,30 +582,40 @@ export class GameManager {
 
     // 1. Advance Gameplay when PLAYING
     if (isPlaying && this.player.state !== 'DEAD') {
-      // Accelerate forward speed slightly over time (Difficulty Scaling)
       this.currentSpeed = Math.min(
         GAME_CONFIG.MAX_SPEED,
         GAME_CONFIG.BASE_SPEED + (this.distance / 100) * GAME_CONFIG.SPEED_ACCELERATION
       );
 
-      // Player forward progression (negative Z in Three.js coordinate system)
+      // Achievements on speed & distance
+      if (this.currentSpeed >= 26) {
+        this.achievementManager.unlock('SPEED_DEMON');
+      }
+      if (this.distance >= 350) {
+        this.achievementManager.unlock('DISTANCE_RUNNER');
+      }
+
       const forwardDistance = this.currentSpeed * delta;
       this.player.mesh.position.z -= forwardDistance;
       this.distance += forwardDistance;
       this.score += Math.floor(forwardDistance * 0.5);
 
-      // Procedural track recycling
+      // Track recycling
       this.trackManager.update(this.player.position.z, (newZPos) => {
-        if (Math.random() > 0.3) {
-          this.coinManager.populateTrackSection(newZPos, 3);
+        if (Math.random() > 0.25) {
+          this.coinManager.populateTrackSection(newZPos);
         }
       });
 
-      // Update coins
-      this.coinManager.update(delta, this.player.position);
+      // Update coins with magnet attraction
+      const isMagnet = this.powerUpManager.isMagnetActive();
+      this.coinManager.update(delta, this.player.position, isMagnet);
+
+      // Update power-ups
+      this.powerUpManager.update(delta, this.player.position, isPlaying);
 
       // Update obstacles & check collision
-      this.obstacleManager.update(this.player.position.z, this.player.getBoundingBox(), isPlaying);
+      this.obstacleManager.update(this.player.position.z, this.player.getBoundingBox(), isPlaying, delta);
 
       // Update enemies
       this.enemyManager.update(delta, this.player.position, isPlaying);
@@ -464,16 +628,14 @@ export class GameManager {
           if (!enemy.isActive || enemy.isDefeated) continue;
 
           if (playerBox.intersectsBox(enemy.boundingBox)) {
-            // Player collides with enemy!
             this.handlePlayerCollisionDamage(1);
-            // Defeat or damage the enemy on ram
             this.enemyManager.hitEnemy(enemy, 1);
             break;
           }
         }
       }
 
-      // Update projectiles & check projectile vs enemy collision
+      // Update projectiles & hits
       this.projectileManager.update(delta, this.enemyManager.pool, (enemy, proj) => {
         this.audioManager.playHitSound();
         this.enemyManager.hitEnemy(enemy, proj.damage);
@@ -494,20 +656,25 @@ export class GameManager {
         }
       }
 
-      // Update target lock assist
+      // Target lock assist
       this.currentTargetEnemy = this.enemyManager.findBestTarget(
         this.player.position,
         this.player.currentLaneIndex
       );
 
-      // Update directional light to follow runner
+      // Update directional light
       this.sceneManager.updateLightPosition(this.player.position.z);
 
-      // Periodically broadcast metrics to React HUD
+      // Update visual effects & speed lines
+      this.vfxManager.update(delta, this.currentSpeed, this.player.position.z);
+
+      // Update language challenge pacing along track
+      this.languageManager.update(delta, this.distance, isPlaying);
+
       this.broadcastMetrics();
     }
 
-    // 2. Character kinematics (jump, gravity, slide, lane lerp, run/death animation)
+    // 2. Character kinematics
     this.player.update(delta, isPlaying, this.currentSpeed);
 
     // 3. Smooth 3rd-person chase camera
@@ -533,8 +700,49 @@ export class GameManager {
         maxAmmo: this.maxAmmo,
         isReloading: this.isReloading,
         hasTargetLock: !!this.currentTargetEnemy,
+        targetEnemyName: this.currentTargetEnemy ? this.currentTargetEnemy.type : undefined,
+        activePowerUps: this.powerUpManager.getActivePowerUps(),
+        currentMessage: this.messageManager.getCurrentMessage(),
+        languageChallenge: {
+          state: this.languageManager.state,
+          item: this.languageManager.currentItem,
+          progress: this.languageManager.progress,
+          aiTeacherStatus: this.languageManager.getAITeacherStatus(),
+        },
       });
     }
+  }
+
+  public setLanguage(code: LanguageCode): void {
+    this.languageManager.setTargetLanguage(code);
+    this.broadcastMetrics();
+  }
+
+  public setLanguageDifficulty(difficulty: LanguageDifficulty): void {
+    this.languageManager.setDifficulty(difficulty);
+    this.broadcastMetrics();
+  }
+
+  public setLanguageCategory(category: string): void {
+    this.languageManager.setCategory(category);
+    this.broadcastMetrics();
+  }
+
+  public setUseAITeacher(enabled: boolean): void {
+    this.languageManager.setUseAITeacher(enabled);
+    this.broadcastMetrics();
+  }
+
+  public playLanguagePronunciation(): void {
+    this.languageManager.triggerAudioPronunciation();
+  }
+
+  public completeLanguageChallenge(): void {
+    this.languageManager.completeChallenge();
+  }
+
+  public skipLanguageChallenge(): void {
+    this.languageManager.skipChallenge();
   }
 
   public dispose(): void {
@@ -545,6 +753,10 @@ export class GameManager {
     }
 
     this.inputManager.dispose();
+    this.languageManager.dispose();
+    this.messageManager.dispose();
+    this.vfxManager.dispose();
+    this.powerUpManager.dispose();
     this.projectileManager.dispose();
     this.enemyManager.dispose();
     this.obstacleManager.dispose();

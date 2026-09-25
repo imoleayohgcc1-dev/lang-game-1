@@ -1,12 +1,15 @@
 import React from 'react';
-import { Play, Settings, Volume2, VolumeX, Sparkles, Navigation } from 'lucide-react';
+import { Play, Settings, Volume2, VolumeX, Sparkles, Navigation, Globe } from 'lucide-react';
 import { GAME_CONFIG } from '../game/constants';
+import { LanguageCode, SUPPORTED_LANGUAGES } from '../game/language/types';
 
 interface StartScreenProps {
   onPlay: () => void;
   onOpenSettings: () => void;
   isMuted: boolean;
   onToggleMute: () => void;
+  currentLanguage?: LanguageCode;
+  onOpenLanguageSelect?: () => void;
 }
 
 export const StartScreen: React.FC<StartScreenProps> = ({
@@ -14,7 +17,11 @@ export const StartScreen: React.FC<StartScreenProps> = ({
   onOpenSettings,
   isMuted,
   onToggleMute,
+  currentLanguage = 'zh-CN',
+  onOpenLanguageSelect,
 }) => {
+  const currentLangInfo = SUPPORTED_LANGUAGES.find((l) => l.code === currentLanguage) || SUPPORTED_LANGUAGES[0];
+
   return (
     <div className="absolute inset-0 z-20 flex flex-col justify-between p-6 sm:p-10 pointer-events-auto bg-gradient-to-b from-slate-950/80 via-slate-950/40 to-slate-950/90 backdrop-blur-[2px] transition-all">
       {/* Top Bar / Branding Status */}
@@ -26,11 +33,23 @@ export const StartScreen: React.FC<StartScreenProps> = ({
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Quick Target Language Selector */}
+          <button
+            onClick={onOpenLanguageSelect}
+            title="Change Target Language"
+            aria-label="Change Target Language"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-200 bg-slate-900/90 hover:bg-slate-800 border border-cyan-500/40 rounded-xl transition-all active:scale-95 touch-manipulation cursor-pointer shadow-md shadow-cyan-950/30"
+          >
+            <Globe className="w-4 h-4 text-cyan-400" />
+            <span className="text-base">{currentLangInfo.flag}</span>
+            <span className="hidden sm:inline font-semibold">{currentLangInfo.name}</span>
+          </button>
+
           <button
             onClick={onToggleMute}
             aria-label={isMuted ? 'Unmute audio' : 'Mute audio'}
-            className="p-3 text-slate-300 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 rounded-xl transition-colors active:scale-95 touch-manipulation"
+            className="p-2.5 sm:p-3 text-slate-300 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 rounded-xl transition-colors active:scale-95 touch-manipulation cursor-pointer"
           >
             {isMuted ? <VolumeX className="w-5 h-5 text-rose-400" /> : <Volume2 className="w-5 h-5 text-cyan-400" />}
           </button>
@@ -38,7 +57,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
           <button
             onClick={onOpenSettings}
             aria-label="Settings"
-            className="p-3 text-slate-300 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 rounded-xl transition-colors active:scale-95 touch-manipulation"
+            className="p-2.5 sm:p-3 text-slate-300 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 rounded-xl transition-colors active:scale-95 touch-manipulation cursor-pointer"
           >
             <Settings className="w-5 h-5" />
           </button>

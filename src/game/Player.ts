@@ -16,6 +16,10 @@ export class Player {
   private reactorMesh!: THREE.Mesh;
   private blasterMesh!: THREE.Group;
   private muzzleTip!: THREE.Object3D;
+  private shieldMesh!: THREE.Mesh;
+  private shieldMat!: THREE.MeshBasicMaterial;
+  private magnetMesh!: THREE.Mesh;
+  private magnetMat!: THREE.MeshBasicMaterial;
 
   // Materials for visual state changes (normal, sliding, death, damage)
   private suitMat!: THREE.MeshStandardMaterial;
@@ -214,8 +218,43 @@ export class Player {
     this.contactShadow.position.y = 0.02;
     this.mesh.add(this.contactShadow);
 
+    // --- POWER-UP VISUAL AURAS ---
+    // Shield Energy Bubble
+    const shieldGeo = new THREE.SphereGeometry(1.4, 16, 12);
+    this.shieldMat = new THREE.MeshBasicMaterial({
+      color: GAME_CONFIG.POWERUPS.TYPES.SHIELD.COLOR,
+      transparent: true,
+      opacity: 0.35,
+      wireframe: true,
+    });
+    this.shieldMesh = new THREE.Mesh(shieldGeo, this.shieldMat);
+    this.shieldMesh.position.y = 1.3;
+    this.shieldMesh.visible = false;
+    this.mesh.add(this.shieldMesh);
+
+    // Magnet Suction Ring
+    const magnetGeo = new THREE.TorusGeometry(1.3, 0.06, 8, 24);
+    magnetGeo.rotateX(-Math.PI / 2);
+    this.magnetMat = new THREE.MeshBasicMaterial({
+      color: GAME_CONFIG.POWERUPS.TYPES.MAGNET.COLOR,
+      transparent: true,
+      opacity: 0.5,
+    });
+    this.magnetMesh = new THREE.Mesh(magnetGeo, this.magnetMat);
+    this.magnetMesh.position.y = 0.3;
+    this.magnetMesh.visible = false;
+    this.mesh.add(this.magnetMesh);
+
     // Initial positioning
     this.mesh.position.set(0, 0, 0);
+  }
+
+  public setShieldActive(active: boolean): void {
+    if (this.shieldMesh) this.shieldMesh.visible = active;
+  }
+
+  public setMagnetActive(active: boolean): void {
+    if (this.magnetMesh) this.magnetMesh.visible = active;
   }
 
   public setLane(laneIndex: number): void {
@@ -539,6 +578,8 @@ export class Player {
     this.isInvulnerable = false;
     this.invulnerabilityTimer = 0;
     this.mesh.visible = true;
+    this.setShieldActive(false);
+    this.setMagnetActive(false);
 
     // Reset materials
     this.visorMat.color.setHex(GAME_CONFIG.COLORS.PLAYER_VISOR);

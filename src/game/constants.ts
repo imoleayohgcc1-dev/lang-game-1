@@ -2,20 +2,40 @@ export type GameState = 'LOADING' | 'READY' | 'PLAYING' | 'PAUSED' | 'GAME_OVER'
 
 export type PlayerState = 'RUNNING' | 'LANE_CHANGING' | 'JUMPING' | 'FALLING' | 'SLIDING' | 'DEAD';
 
-export type ObstacleType = 'LOW' | 'HIGH' | 'BLOCKING';
+export type ObstacleType = 'LOW' | 'HIGH' | 'BLOCKING' | 'MOVING_BARRIER';
 
 export type EnemyType = 'BASIC' | 'FAST' | 'ARMORED';
 
+export type PowerUpType = 'MAGNET' | 'SHIELD' | 'COIN_MULTIPLIER';
+
+export type EnvironmentTheme = 'CITY' | 'TROPICAL' | 'CYBERPUNK';
+
+export type DayNightMode = 'DAY' | 'NIGHT';
+
+export type GraphicsQuality = 'LOW' | 'MEDIUM' | 'HIGH';
+
 export interface GameSettings {
+  musicEnabled: boolean;
   soundEnabled: boolean;
-  shadowsEnabled: boolean;
-  masterVolume: number;
+  graphicsQuality: GraphicsQuality;
+  theme: EnvironmentTheme;
+  dayNight: DayNightMode;
+  controlSensitivity: number; // 1.0 = normal, 1.3 = fast
 }
+
+export const DEFAULT_SETTINGS: GameSettings = {
+  musicEnabled: true,
+  soundEnabled: true,
+  graphicsQuality: 'MEDIUM',
+  theme: 'CYBERPUNK',
+  dayNight: 'NIGHT',
+  controlSensitivity: 1.0,
+};
 
 export const GAME_CONFIG = {
   TITLE: 'LANGUAGE RUNNER',
   SUBTITLE: 'Run. Learn. Speak.',
-  VERSION: '0.3.0-phase3',
+  VERSION: '0.4.0-phase4',
 
   // Gameplay & Physics
   BASE_SPEED: 18.0, // units per second
@@ -33,6 +53,32 @@ export const GAME_CONFIG = {
   SLIDE_DURATION: 0.72, // seconds
   PLAYER_NORMAL_HEIGHT: 2.0,
   PLAYER_SLIDE_HEIGHT: 0.75,
+
+  // Power-Up System Configuration
+  POWERUPS: {
+    SPAWN_INTERVAL_MIN: 55.0, // meters between power-up opportunities
+    SPAWN_INTERVAL_MAX: 95.0,
+    POOL_SIZE: 6,
+    TYPES: {
+      MAGNET: {
+        DURATION: 10.0, // seconds
+        RADIUS: 14.0, // coin attraction radius
+        COLOR: 0x06b6d4, // Cyan
+        NAME: 'Coin Magnet',
+      },
+      SHIELD: {
+        DURATION: 15.0, // seconds
+        COLOR: 0x10b981, // Emerald Green
+        NAME: 'Energy Shield',
+      },
+      COIN_MULTIPLIER: {
+        DURATION: 12.0, // seconds
+        MULTIPLIER: 2,
+        COLOR: 0xf59e0b, // Amber Gold
+        NAME: '2X Multiplier',
+      },
+    },
+  },
   
   // Combat System Configuration
   COMBAT: {
@@ -87,10 +133,11 @@ export const GAME_CONFIG = {
   ROAD_WIDTH: 10.0,
   
   // Obstacle Spawning & Difficulty
-  OBSTACLE_POOL_SIZE: 24,
+  OBSTACLE_POOL_SIZE: 28,
   FIRST_OBSTACLE_Z: -35,
   MIN_OBSTACLE_GAP: 24.0, // minimum distance between obstacle waves
   MAX_OBSTACLE_GAP: 38.0,
+  MOVING_OBSTACLE_SPEED: 2.2, // side-to-side oscillation speed
   
   // Coin settings
   COIN_SPIN_SPEED: 3.5,
@@ -99,7 +146,7 @@ export const GAME_CONFIG = {
   COIN_COLLECT_DISTANCE: 1.5,
   COIN_VALUE: 10,
   
-  // Colors & visual theme
+  // Colors & visual themes
   COLORS: {
     FOG: 0x070c18,
     SKY_TOP: '#050813',
@@ -124,6 +171,55 @@ export const GAME_CONFIG = {
     LIGHT_FILL: 0x818cf8,
   },
   
+  // Theme Presets
+  THEMES: {
+    CYBERPUNK: {
+      NAME: 'Cyberpunk Metro',
+      FOG_NIGHT: 0x070c18,
+      FOG_DAY: 0x1a2138,
+      SKY_TOP_NIGHT: '#050813',
+      SKY_BOTTOM_NIGHT: '#111936',
+      SKY_TOP_DAY: '#1e293b',
+      SKY_BOTTOM_DAY: '#334155',
+      ROAD_COLOR: 0x12172b,
+      VERGE_COLOR: 0x090e1c,
+      CURB_COLOR: 0x06b6d4,
+      ACCENT_COLOR: 0x8b5cf6,
+      SUN_INTENSITY_DAY: 1.6,
+      SUN_INTENSITY_NIGHT: 0.9,
+    },
+    CITY: {
+      NAME: 'Modern City',
+      FOG_NIGHT: 0x0a101f,
+      FOG_DAY: 0x93c5fd,
+      SKY_TOP_NIGHT: '#070f26',
+      SKY_BOTTOM_NIGHT: '#132147',
+      SKY_TOP_DAY: '#38bdf8',
+      SKY_BOTTOM_DAY: '#bae6fd',
+      ROAD_COLOR: 0x1e2430,
+      VERGE_COLOR: 0x334155,
+      CURB_COLOR: 0xf59e0b,
+      ACCENT_COLOR: 0x3b82f6,
+      SUN_INTENSITY_DAY: 1.8,
+      SUN_INTENSITY_NIGHT: 0.8,
+    },
+    TROPICAL: {
+      NAME: 'Tropical Island',
+      FOG_NIGHT: 0x081b24,
+      FOG_DAY: 0x67e8f9,
+      SKY_TOP_NIGHT: '#041724',
+      SKY_BOTTOM_NIGHT: '#0f3147',
+      SKY_TOP_DAY: '#0284c7',
+      SKY_BOTTOM_DAY: '#a5f3fc',
+      ROAD_COLOR: 0x292524,
+      VERGE_COLOR: 0x14532d,
+      CURB_COLOR: 0x10b981,
+      ACCENT_COLOR: 0xf97316,
+      SUN_INTENSITY_DAY: 2.0,
+      SUN_INTENSITY_NIGHT: 0.7,
+    },
+  },
+
   // Camera
   CAMERA: {
     FOV_DESKTOP: 60,

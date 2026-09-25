@@ -1,6 +1,7 @@
 import React from 'react';
-import { Play, RotateCcw, Volume2, VolumeX, Settings, X } from 'lucide-react';
+import { Play, RotateCcw, Volume2, VolumeX, Settings, Globe } from 'lucide-react';
 import { GameMetrics } from '../game/GameManager';
+import { LanguageCode, SUPPORTED_LANGUAGES } from '../game/language/types';
 
 interface PauseModalProps {
   metrics: GameMetrics;
@@ -9,6 +10,8 @@ interface PauseModalProps {
   onOpenSettings: () => void;
   isMuted: boolean;
   onToggleMute: () => void;
+  currentLanguage?: LanguageCode;
+  onOpenLanguageSelect?: () => void;
 }
 
 export const PauseModal: React.FC<PauseModalProps> = ({
@@ -18,7 +21,10 @@ export const PauseModal: React.FC<PauseModalProps> = ({
   onOpenSettings,
   isMuted,
   onToggleMute,
+  currentLanguage,
+  onOpenLanguageSelect,
 }) => {
+  const currentLangInfo = SUPPORTED_LANGUAGES.find((l) => l.code === currentLanguage);
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md pointer-events-auto">
       <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl flex flex-col items-center text-center">
@@ -65,6 +71,20 @@ export const PauseModal: React.FC<PauseModalProps> = ({
             <RotateCcw className="w-4 h-4" />
             <span>RESTART RUN</span>
           </button>
+
+          {onOpenLanguageSelect && currentLangInfo && (
+            <button
+              onClick={onOpenLanguageSelect}
+              className="w-full py-2.5 px-4 bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-medium text-sm rounded-xl border border-cyan-500/30 flex items-center justify-between active:scale-98 transition-all touch-manipulation cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-cyan-400" />
+                <span className="text-xs text-slate-400">Target Language:</span>
+                <span className="text-xs font-bold text-white">{currentLangInfo.name}</span>
+              </div>
+              <span className="text-base">{currentLangInfo.flag}</span>
+            </button>
+          )}
 
           <div className="flex items-center gap-3 mt-1">
             <button

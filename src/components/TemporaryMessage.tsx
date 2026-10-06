@@ -26,12 +26,20 @@ export const TemporaryMessage: React.FC<TemporaryMessageProps> = ({ message }) =
           badgeText: 'TARGET LOCK',
           badgeClass: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
         };
-      case 'language':
+      case 'combat':
         return {
-          icon: <BookOpen className="w-3.5 h-3.5 text-cyan-400 shrink-0" />,
+          icon: <Crosshair className="w-3.5 h-3.5 text-amber-400 shrink-0" />,
           wrapperClass:
-            'bg-slate-900/90 border-cyan-500/40 text-slate-100 shadow-cyan-950/40',
-          badgeText: 'LEARN',
+            'bg-amber-950/85 border-amber-500/40 text-amber-200 shadow-amber-950/50',
+          badgeText: 'COMBAT',
+          badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+        };
+      case 'powerup':
+        return {
+          icon: <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />,
+          wrapperClass:
+            'bg-cyan-950/85 border-cyan-500/40 text-cyan-200 shadow-cyan-950/50',
+          badgeText: 'POWER UP',
           badgeClass: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
         };
       case 'warning':

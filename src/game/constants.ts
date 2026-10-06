@@ -1,4 +1,4 @@
-export type GameState = 'LOADING' | 'READY' | 'PLAYING' | 'PAUSED' | 'GAME_OVER';
+export type GameState = 'LOADING' | 'READY' | 'PLAYING' | 'PAUSED' | 'GAME_OVER' | 'LESSON_COMPLETE';
 
 export type PlayerState = 'RUNNING' | 'LANE_CHANGING' | 'JUMPING' | 'FALLING' | 'SLIDING' | 'DEAD';
 
@@ -21,6 +21,9 @@ export interface GameSettings {
   theme: EnvironmentTheme;
   dayNight: DayNightMode;
   controlSensitivity: number; // 1.0 = normal, 1.3 = fast
+  voiceRecognitionEnabled: boolean;
+  autoListen: boolean;
+  pronunciationAudioEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -30,12 +33,15 @@ export const DEFAULT_SETTINGS: GameSettings = {
   theme: 'CYBERPUNK',
   dayNight: 'NIGHT',
   controlSensitivity: 1.0,
+  voiceRecognitionEnabled: true,
+  autoListen: false,
+  pronunciationAudioEnabled: true,
 };
 
 export const GAME_CONFIG = {
-  TITLE: 'LANGUAGE RUNNER',
-  SUBTITLE: 'Run. Learn. Speak.',
-  VERSION: '0.4.0-phase4',
+  TITLE: 'CYBER RUNNER 3D',
+  SUBTITLE: 'Run · Shoot · Blast · Survive',
+  VERSION: '1.0.0-phase11',
 
   // Gameplay & Physics
   BASE_SPEED: 18.0, // units per second

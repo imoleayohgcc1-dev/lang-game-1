@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GAME_CONFIG } from './constants';
+import { CoinDensity } from './levels/levelTypes';
 
 export interface CoinInstance {
   mesh: THREE.Group;
@@ -17,6 +18,7 @@ export class CoinManager {
   private coinPool: CoinInstance[] = [];
   private poolSize = 48; // increased pool size for multi-lane formations
   private animTime = 0;
+  private coinCountPerPattern = 4;
 
   // Shared assets for performance
   private coinGeo: THREE.CylinderGeometry;
@@ -104,6 +106,21 @@ export class CoinManager {
     return coin;
   }
 
+  public setDensity(density: CoinDensity): void {
+    switch (density) {
+      case 'HIGH':
+        this.coinCountPerPattern = 5;
+        break;
+      case 'LOW':
+        this.coinCountPerPattern = 3;
+        break;
+      case 'MEDIUM':
+      default:
+        this.coinCountPerPattern = 4;
+        break;
+    }
+  }
+
   /**
    * Spawn patterns of coins ahead on track segment
    */
@@ -113,36 +130,33 @@ export class CoinManager {
 
     const baseLane = Math.floor(Math.random() * 3);
     const spacing = 3.6;
+    const count = this.coinCountPerPattern;
 
     switch (chosenPattern) {
       case 'STRAIGHT': {
-        // 4 coins straight down baseLane
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < count; i++) {
           this.spawnCoin(baseLane, startZ - i * spacing, 1.1);
         }
         break;
       }
       case 'CURVE': {
-        // Arc from lane to adjacent lane
         const dir = baseLane === 0 ? 1 : baseLane === 2 ? -1 : (Math.random() > 0.5 ? 1 : -1);
-        for (let i = 0; i < 4; i++) {
-          const l = Math.max(0, Math.min(2, baseLane + Math.round((i / 3) * dir)));
+        for (let i = 0; i < count; i++) {
+          const l = Math.max(0, Math.min(2, baseLane + Math.round((i / (count - 1)) * dir)));
           this.spawnCoin(l, startZ - i * spacing, 1.1);
         }
         break;
       }
       case 'ZIGZAG': {
-        // Alternating between two lanes
         const otherLane = baseLane === 1 ? 0 : 1;
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < count; i++) {
           const l = i % 2 === 0 ? baseLane : otherLane;
           this.spawnCoin(l, startZ - i * spacing, 1.1);
         }
         break;
       }
       case 'JUMP_PATH': {
-        // Parabolic jump arc in lane (1.1 -> 1.7 -> 2.3 -> 1.7 -> 1.1)
-        const heights = [1.1, 1.7, 2.35, 1.7, 1.1];
+        const heights = count === 3 ? [1.1, 2.2, 1.1] : count === 5 ? [1.1, 1.6, 2.35, 1.6, 1.1] : [1.1, 1.7, 2.35, 1.1];
         for (let i = 0; i < heights.length; i++) {
           this.spawnCoin(baseLane, startZ - i * 3.2, heights[i]);
         }

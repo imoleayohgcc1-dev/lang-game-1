@@ -1,0 +1,335 @@
+import {
+  LevelDefinition,
+  LevelProgressState,
+} from './levelTypes';
+
+export const LEVEL_PROGRESS_STORAGE_KEY = 'action_runner_level_progress';
+
+export const DEFAULT_LEVEL_PROGRESS: LevelProgressState = {
+  unlockedLevels: [1],
+  completedLevels: [],
+  currentLevelNumber: 1,
+  bestScores: {},
+  bestDistances: {},
+  stars: {},
+  totalLevelCoins: 0,
+  totalLevelXP: 0,
+};
+
+export const INITIAL_LEVELS: LevelDefinition[] = [
+  {
+    levelId: 'level_1',
+    levelNumber: 1,
+    levelName: 'Getting Started',
+    description: 'Learn basic runner controls and weapons in the sunlit modern city.',
+    environment: 'CITY',
+    dayNight: 'DAY',
+    targetDistance: 500,
+    startingSpeed: 18.0,
+    maximumSpeed: 22.0,
+    speedAcceleration: 0.06,
+    obstacleDifficulty: 'LOW',
+    obstacleGapMultiplier: 1.35,
+    enemyDifficulty: 'LOW',
+    enemySpawnRate: 0.5,
+    maximumActiveEnemies: 2,
+    coinDensity: 'HIGH',
+    powerUpFrequency: 'GENEROUS',
+    completionRequirements: {
+      targetDistance: 500,
+      requiredCoins: 15,
+    },
+    secondaryObjectives: [
+      {
+        id: 'l1_obj_coins',
+        description: 'Collect 25 coins',
+        type: 'COINS_COLLECTED',
+        targetValue: 25,
+        bonusXP: 30,
+        bonusCoins: 15,
+      },
+      {
+        id: 'l1_obj_enemies',
+        description: 'Defeat 2 patrol drones',
+        type: 'ENEMIES_DEFEATED',
+        targetValue: 2,
+        bonusXP: 40,
+        bonusCoins: 20,
+      },
+    ],
+    rewardConfiguration: {
+      completionXP: 100,
+      completionCoins: 50,
+      starBonusXP: 30,
+      starBonusCoins: 15,
+    },
+    checkpoints: [25, 50, 75],
+  },
+  {
+    levelId: 'level_2',
+    levelNumber: 2,
+    levelName: 'City Rush',
+    description: 'Navigate traffic barriers and agile drone patrols through dusk city avenues.',
+    environment: 'CITY',
+    dayNight: 'NIGHT',
+    targetDistance: 800,
+    startingSpeed: 20.0,
+    maximumSpeed: 24.5,
+    speedAcceleration: 0.07,
+    obstacleDifficulty: 'LOW',
+    obstacleGapMultiplier: 1.15,
+    enemyDifficulty: 'LOW',
+    enemySpawnRate: 0.8,
+    maximumActiveEnemies: 3,
+    coinDensity: 'HIGH',
+    powerUpFrequency: 'GENEROUS',
+    completionRequirements: {
+      targetDistance: 800,
+      requiredEnemiesDefeated: 2,
+    },
+    secondaryObjectives: [
+      {
+        id: 'l2_obj_coins',
+        description: 'Collect 40 coins',
+        type: 'COINS_COLLECTED',
+        targetValue: 40,
+        bonusXP: 40,
+        bonusCoins: 20,
+      },
+      {
+        id: 'l2_obj_enemies',
+        description: 'Defeat 4 patrol drones',
+        type: 'ENEMIES_DEFEATED',
+        targetValue: 4,
+        bonusXP: 45,
+        bonusCoins: 25,
+      },
+    ],
+    rewardConfiguration: {
+      completionXP: 140,
+      completionCoins: 70,
+      starBonusXP: 35,
+      starBonusCoins: 20,
+    },
+    checkpoints: [25, 50, 75],
+  },
+  {
+    levelId: 'level_3',
+    levelNumber: 3,
+    levelName: 'Tropical Sprint',
+    description: 'Brisk sprint through outdoor greenery with curve paths and moving barricades.',
+    environment: 'TROPICAL',
+    dayNight: 'DAY',
+    targetDistance: 1100,
+    startingSpeed: 21.0,
+    maximumSpeed: 25.5,
+    speedAcceleration: 0.075,
+    obstacleDifficulty: 'MEDIUM',
+    obstacleGapMultiplier: 1.0,
+    enemyDifficulty: 'MEDIUM',
+    enemySpawnRate: 1.0,
+    maximumActiveEnemies: 4,
+    coinDensity: 'MEDIUM',
+    powerUpFrequency: 'STANDARD',
+    completionRequirements: {
+      targetDistance: 1100,
+      requiredCoins: 30,
+    },
+    secondaryObjectives: [
+      {
+        id: 'l3_obj_bombs',
+        description: 'Detonate 1 bomb',
+        type: 'BOMBS_USED',
+        targetValue: 1,
+        bonusXP: 50,
+        bonusCoins: 25,
+      },
+      {
+        id: 'l3_obj_coins',
+        description: 'Collect 60 coins',
+        type: 'COINS_COLLECTED',
+        targetValue: 60,
+        bonusXP: 50,
+        bonusCoins: 30,
+      },
+    ],
+    rewardConfiguration: {
+      completionXP: 180,
+      completionCoins: 90,
+      starBonusXP: 40,
+      starBonusCoins: 25,
+    },
+    checkpoints: [25, 50, 75],
+  },
+  {
+    levelId: 'level_4',
+    levelNumber: 4,
+    levelName: 'Night Chase',
+    description: 'High-stakes neon highway pursuit with armored interceptors and complex gantry lasers.',
+    environment: 'CYBERPUNK',
+    dayNight: 'NIGHT',
+    targetDistance: 1400,
+    startingSpeed: 22.0,
+    maximumSpeed: 27.5,
+    speedAcceleration: 0.08,
+    obstacleDifficulty: 'MEDIUM',
+    obstacleGapMultiplier: 0.95,
+    enemyDifficulty: 'MEDIUM',
+    enemySpawnRate: 1.2,
+    maximumActiveEnemies: 5,
+    coinDensity: 'MEDIUM',
+    powerUpFrequency: 'STANDARD',
+    completionRequirements: {
+      targetDistance: 1400,
+      requiredEnemiesDefeated: 5,
+    },
+    secondaryObjectives: [
+      {
+        id: 'l4_obj_enemies',
+        description: 'Defeat 6 hostile drones',
+        type: 'ENEMIES_DEFEATED',
+        targetValue: 6,
+        bonusXP: 60,
+        bonusCoins: 35,
+      },
+      {
+        id: 'l4_obj_nodamage',
+        description: 'Clear with no damage taken',
+        type: 'NO_DAMAGE',
+        targetValue: 1,
+        bonusXP: 70,
+        bonusCoins: 40,
+      },
+    ],
+    rewardConfiguration: {
+      completionXP: 230,
+      completionCoins: 120,
+      starBonusXP: 50,
+      starBonusCoins: 30,
+    },
+    checkpoints: [25, 50, 75],
+  },
+  {
+    levelId: 'level_5',
+    levelNumber: 5,
+    levelName: 'Speed District',
+    description: 'Intense velocity test across elevated neon skyways with aggressive enemy formations.',
+    environment: 'CYBERPUNK',
+    dayNight: 'NIGHT',
+    targetDistance: 1800,
+    startingSpeed: 24.0,
+    maximumSpeed: 30.0,
+    speedAcceleration: 0.085,
+    obstacleDifficulty: 'HIGH',
+    obstacleGapMultiplier: 0.88,
+    enemyDifficulty: 'HIGH',
+    enemySpawnRate: 1.35,
+    maximumActiveEnemies: 6,
+    coinDensity: 'HIGH',
+    powerUpFrequency: 'STANDARD',
+    completionRequirements: {
+      targetDistance: 1800,
+      requiredEnemiesDefeated: 6,
+    },
+    secondaryObjectives: [
+      {
+        id: 'l5_obj_coins',
+        description: 'Collect 90 coins',
+        type: 'COINS_COLLECTED',
+        targetValue: 90,
+        bonusXP: 70,
+        bonusCoins: 40,
+      },
+      {
+        id: 'l5_obj_enemies',
+        description: 'Defeat 8 hostile drones',
+        type: 'ENEMIES_DEFEATED',
+        targetValue: 8,
+        bonusXP: 75,
+        bonusCoins: 45,
+      },
+    ],
+    rewardConfiguration: {
+      completionXP: 300,
+      completionCoins: 160,
+      starBonusXP: 60,
+      starBonusCoins: 35,
+    },
+    checkpoints: [25, 50, 75],
+  },
+];
+
+/**
+ * Procedural level generator supporting infinite progression beyond base levels.
+ */
+export function generateProceduralLevel(levelNumber: number): LevelDefinition {
+  const environments: ('CITY' | 'TROPICAL' | 'CYBERPUNK')[] = ['CITY', 'TROPICAL', 'CYBERPUNK'];
+  const dayNights: ('DAY' | 'NIGHT')[] = ['DAY', 'NIGHT'];
+
+  const env = environments[(levelNumber - 1) % environments.length];
+  const dn = dayNights[Math.floor((levelNumber - 1) / 2) % dayNights.length];
+
+  const targetDistance = 1800 + (levelNumber - 5) * 350;
+  const startingSpeed = Math.min(27.0, 24.0 + (levelNumber - 5) * 0.4);
+  const maximumSpeed = Math.min(33.0, 30.0 + (levelNumber - 5) * 0.5);
+
+  const levelNames = [
+    'Neon Horizon',
+    'Quantum Expressway',
+    'Solar Circuit',
+    'Cyber Grid Alpha',
+    'Vanguard Skyway',
+    'Pulse Corridor',
+  ];
+  const nameIndex = (levelNumber - 6) % levelNames.length;
+  const levelName = `${levelNames[nameIndex]} ${Math.ceil((levelNumber - 5) / levelNames.length)}`;
+
+  return {
+    levelId: `level_${levelNumber}`,
+    levelNumber,
+    levelName,
+    description: `Procedural high-velocity sector ${levelNumber} testing reflex and combat agility.`,
+    environment: env,
+    dayNight: dn,
+    targetDistance,
+    startingSpeed,
+    maximumSpeed,
+    speedAcceleration: 0.09,
+    obstacleDifficulty: 'HIGH',
+    obstacleGapMultiplier: Math.max(0.8, 0.88 - (levelNumber - 5) * 0.015),
+    enemyDifficulty: 'HIGH',
+    enemySpawnRate: Math.min(1.6, 1.35 + (levelNumber - 5) * 0.05),
+    maximumActiveEnemies: 6,
+    coinDensity: 'HIGH',
+    powerUpFrequency: 'STANDARD',
+    completionRequirements: {
+      targetDistance,
+      requiredEnemiesDefeated: Math.min(10, 6 + Math.floor((levelNumber - 5) / 2)),
+    },
+    secondaryObjectives: [
+      {
+        id: `l${levelNumber}_obj_coins`,
+        description: `Collect ${Math.floor(targetDistance * 0.06)} coins`,
+        type: 'COINS_COLLECTED',
+        targetValue: Math.floor(targetDistance * 0.06),
+        bonusXP: 80,
+        bonusCoins: 50,
+      },
+      {
+        id: `l${levelNumber}_obj_enemies`,
+        description: `Defeat ${Math.min(15, 8 + (levelNumber - 5))} drones`,
+        type: 'ENEMIES_DEFEATED',
+        targetValue: Math.min(15, 8 + (levelNumber - 5)),
+        bonusXP: 85,
+        bonusCoins: 50,
+      },
+    ],
+    rewardConfiguration: {
+      completionXP: 300 + (levelNumber - 5) * 50,
+      completionCoins: 160 + (levelNumber - 5) * 25,
+      starBonusXP: 65,
+      starBonusCoins: 40,
+    },
+    checkpoints: [25, 50, 75],
+  };
+}

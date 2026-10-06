@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { GAME_CONFIG } from './constants';
+import { WeaponType } from './combatTypes';
+import { WEAPON_CONFIGS } from './combatConfig';
 import { EnemyInstance } from './EnemyManager';
 
 export interface ProjectileInstance {
@@ -8,40 +10,31 @@ export interface ProjectileInstance {
   isActive: boolean;
   distanceTraveled: number;
   damage: number;
+  weaponType: WeaponType;
   boundingBox: THREE.Box3;
   targetEnemy: EnemyInstance | null;
+  coreMesh: THREE.Mesh;
+  glowMesh: THREE.Mesh;
 }
 
 export class ProjectileManager {
   private scene: THREE.Scene;
   private pool: ProjectileInstance[] = [];
-  private poolSize = GAME_CONFIG.COMBAT.PROJECTILE_POOL_SIZE;
+  private poolSize = 40;
 
-  // Shared geometries and materials
+  // Shared geometries
   private boltGeo: THREE.CylinderGeometry;
   private glowGeo: THREE.CylinderGeometry;
-  private boltMat: THREE.MeshBasicMaterial;
-  private glowMat: THREE.MeshBasicMaterial;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
 
-    // Outer and core laser bolt geometries
+    // Laser bolt geometries
     this.boltGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.4, 8);
     this.boltGeo.rotateX(Math.PI / 2);
 
-    this.glowGeo = new THREE.CylinderGeometry(0.16, 0.16, 1.6, 8);
+    this.glowGeo = new THREE.CylinderGeometry(0.18, 0.18, 1.6, 8);
     this.glowGeo.rotateX(Math.PI / 2);
-
-    this.boltMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-    });
-
-    this.glowMat = new THREE.MeshBasicMaterial({
-      color: GAME_CONFIG.COLORS.PROJECTILE_CYAN,
-      transparent: true,
-      opacity: 0.75,
-    });
 
     this.buildPool();
   }
@@ -51,10 +44,16 @@ export class ProjectileManager {
       const group = new THREE.Group();
       group.name = `projectile_${i}`;
 
-      const coreMesh = new THREE.Mesh(this.boltGeo, this.boltMat);
+      const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const coreMesh = new THREE.Mesh(this.boltGeo, coreMat);
       group.add(coreMesh);
 
-      const glowMesh = new THREE.Mesh(this.glowGeo, this.glowMat);
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: GAME_CONFIG.COLORS.PROJECTILE_CYAN,
+        transparent: true,
+        opacity: 0.8,
+      });
+      const glowMesh = new THREE.Mesh(this.glowGeo, glowMat);
       group.add(glowMesh);
 
       group.visible = false;
@@ -66,40 +65,52 @@ export class ProjectileManager {
         velocity: new THREE.Vector3(0, 0, -GAME_CONFIG.COMBAT.PROJECTILE_SPEED),
         isActive: false,
         distanceTraveled: 0,
-        damage: GAME_CONFIG.COMBAT.PROJECTILE_DAMAGE,
+        damage: 1,
+        weaponType: 'NORMAL',
         boundingBox: new THREE.Box3(),
         targetEnemy: null,
+        coreMesh,
+        glowMesh,
       });
     }
   }
 
   /**
-   * Spawn a projectile from muzzle towards target vector with target assist
+   * Spawn a projectile from muzzle towards target with weapon configuration
    */
   public spawn(
     muzzlePos: THREE.Vector3,
     targetDir: THREE.Vector3,
-    targetEnemy: EnemyInstance | null = null
+    targetEnemy: EnemyInstance | null = null,
+    weaponType: WeaponType = 'NORMAL'
   ): ProjectileInstance | null {
     const proj = this.pool.find((p) => !p.isActive);
     if (!proj) return null;
 
+    const spec = WEAPON_CONFIGS[weaponType] || WEAPON_CONFIGS.NORMAL;
+
     proj.isActive = true;
     proj.distanceTraveled = 0;
     proj.targetEnemy = targetEnemy;
+    proj.damage = spec.damage;
+    proj.weaponType = weaponType;
     proj.mesh.position.copy(muzzlePos);
 
+    // Apply scale and color based on weapon
+    proj.mesh.scale.set(spec.projectileScale, spec.projectileScale, spec.projectileScale);
+    (proj.glowMesh.material as THREE.MeshBasicMaterial).color.setHex(spec.projectileColor);
+
     // Compute velocity direction
+    const speed = spec.projectileSpeed;
     if (targetEnemy && targetEnemy.isActive) {
-      // Calculate lead vector towards enemy center
       const enemyCenter = targetEnemy.mesh.position.clone().add(new THREE.Vector3(0, 1.0, 0));
       const aimDir = enemyCenter.sub(muzzlePos).normalize();
-      proj.velocity.copy(aimDir).multiplyScalar(GAME_CONFIG.COMBAT.PROJECTILE_SPEED);
+      proj.velocity.copy(aimDir).multiplyScalar(speed);
       proj.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), aimDir);
     } else {
-      // Direct forward shot
-      proj.velocity.copy(targetDir).normalize().multiplyScalar(GAME_CONFIG.COMBAT.PROJECTILE_SPEED);
-      proj.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), targetDir.normalize());
+      const dir = targetDir.clone().normalize();
+      proj.velocity.copy(dir).multiplyScalar(speed);
+      proj.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), dir);
     }
 
     proj.mesh.visible = true;
@@ -110,8 +121,9 @@ export class ProjectileManager {
 
   private updateBoundingBox(proj: ProjectileInstance): void {
     const p = proj.mesh.position;
-    proj.boundingBox.min.set(p.x - 0.35, p.y - 0.35, p.z - 0.8);
-    proj.boundingBox.max.set(p.x + 0.35, p.y + 0.35, p.z + 0.8);
+    const halfWidth = proj.weaponType === 'BIG_BULLET' ? 0.8 : 0.4;
+    proj.boundingBox.min.set(p.x - halfWidth, p.y - halfWidth, p.z - 1.0);
+    proj.boundingBox.max.set(p.x + halfWidth, p.y + halfWidth, p.z + 1.0);
   }
 
   public update(
@@ -144,15 +156,16 @@ export class ProjectileManager {
         }
       }
 
+      // 3. Collision hit event
       if (hitEnemy) {
-        this.deactivate(proj);
         if (onHit) {
           onHit(hitEnemy, proj);
         }
+        this.deactivate(proj);
         continue;
       }
 
-      // 3. Recycle if traveled beyond maximum range
+      // 4. Recycle if traveled beyond maximum range
       if (proj.distanceTraveled >= maxDist) {
         this.deactivate(proj);
       }
@@ -167,18 +180,15 @@ export class ProjectileManager {
   }
 
   public reset(): void {
-    this.pool.forEach((p) => this.deactivate(p));
+    for (let i = 0; i < this.pool.length; i++) {
+      this.deactivate(this.pool[i]);
+    }
   }
 
   public dispose(): void {
-    this.pool.forEach((p) => {
-      this.scene.remove(p.mesh);
-    });
+    for (let i = 0; i < this.pool.length; i++) {
+      this.scene.remove(this.pool[i].mesh);
+    }
     this.pool = [];
-
-    this.boltGeo.dispose();
-    this.glowGeo.dispose();
-    this.boltMat.dispose();
-    this.glowMat.dispose();
   }
 }

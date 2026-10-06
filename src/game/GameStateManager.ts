@@ -45,14 +45,20 @@ export class GameStateManager {
       case 'READY':
         return to === 'PLAYING';
       case 'PLAYING':
-        return to === 'PAUSED' || to === 'GAME_OVER' || to === 'READY';
+        return to === 'PAUSED' || to === 'GAME_OVER' || to === 'READY' || to === 'LESSON_COMPLETE';
       case 'PAUSED':
         return to === 'PLAYING' || to === 'READY';
       case 'GAME_OVER':
         return to === 'READY' || to === 'PLAYING';
+      case 'LESSON_COMPLETE':
+        return to === 'PLAYING' || to === 'READY';
       default:
         return true;
     }
+  }
+
+  public isLessonComplete(): boolean {
+    return this.currentState === 'LESSON_COMPLETE';
   }
 
   public subscribe(callback: StateChangeCallback): () => void {

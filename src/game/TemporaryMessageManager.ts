@@ -1,4 +1,11 @@
-export type MessageType = 'gameplay' | 'target' | 'objective' | 'language' | 'warning' | 'success';
+export type MessageType =
+  | 'gameplay'
+  | 'target'
+  | 'objective'
+  | 'warning'
+  | 'success'
+  | 'combat'
+  | 'powerup';
 
 export interface TemporaryMessageState {
   id: string;

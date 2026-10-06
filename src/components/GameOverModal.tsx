@@ -1,19 +1,22 @@
 import React from 'react';
-import { RotateCcw, Home, Trophy, CircleDot, Flame } from 'lucide-react';
+import { RotateCcw, Home, Trophy, CircleDot, Flame, List, Target } from 'lucide-react';
 import { GameMetrics } from '../game/GameManager';
 
 interface GameOverModalProps {
   metrics: GameMetrics;
   onRetry: () => void;
   onHome: () => void;
+  onOpenLevelSelect?: () => void;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
   metrics,
   onRetry,
   onHome,
+  onOpenLevelSelect,
 }) => {
   const isNewRecord = metrics.score >= metrics.highScore && metrics.score > 0;
+  const levelProgress = metrics.levelProgress;
 
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md pointer-events-auto animate-in fade-in duration-200">
@@ -25,9 +28,38 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         <h2 className="text-3xl sm:text-4xl font-display font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-rose-400 via-red-300 to-amber-300 mb-1">
           GAME OVER
         </h2>
-        <p className="text-xs font-medium text-slate-400 mb-6">
+        <p className="text-xs font-medium text-slate-400 mb-4">
           Track obstacle collision detected!
         </p>
+
+        {/* Level Progression Banner */}
+        {levelProgress && (
+          <div className="w-full p-3 mb-4 bg-slate-950/80 rounded-2xl border border-indigo-950/80 text-left">
+            <div className="flex items-center justify-between text-xs mb-1.5">
+              <span className="font-bold text-indigo-300">
+                LEVEL {levelProgress.levelNumber}: {levelProgress.levelName}
+              </span>
+              <span className="font-mono text-cyan-300 font-bold">
+                {levelProgress.progressPercentage}%
+              </span>
+            </div>
+            <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden mb-1">
+              <div
+                className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-all duration-300"
+                style={{ width: `${Math.min(100, levelProgress.progressPercentage)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-slate-400">
+              <span className="flex items-center gap-1">
+                <Target className="w-3 h-3 text-cyan-400" />
+                {levelProgress.currentDistance}m / {levelProgress.targetDistance}m
+              </span>
+              <span>
+                {Math.max(0, levelProgress.targetDistance - levelProgress.currentDistance)}m remaining
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* New Record Banner if applicable */}
         {isNewRecord && (
@@ -38,7 +70,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         )}
 
         {/* Results Grid */}
-        <div className="w-full grid grid-cols-2 gap-3 mb-6 p-4 bg-slate-950/60 rounded-2xl border border-slate-800/80">
+        <div className="w-full grid grid-cols-2 gap-3 mb-5 p-4 bg-slate-950/60 rounded-2xl border border-slate-800/80">
           {/* Final Score */}
           <div className="flex flex-col text-left">
             <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
@@ -86,20 +118,34 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         {/* Primary Action: RETRY */}
         <button
           onClick={onRetry}
-          className="w-full py-4 px-6 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:via-blue-500 hover:to-indigo-500 text-white font-bold text-lg rounded-2xl shadow-lg shadow-cyan-500/25 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation mb-3"
+          className="w-full py-3.5 px-6 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:via-blue-500 hover:to-indigo-500 text-white font-bold text-base rounded-2xl shadow-lg shadow-cyan-500/25 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation mb-2.5"
         >
           <RotateCcw className="w-5 h-5" />
-          <span>RETRY</span>
+          <span>RETRY LEVEL</span>
         </button>
 
-        {/* Secondary Action: HOME */}
-        <button
-          onClick={onHome}
-          className="w-full py-3 px-6 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-sm rounded-xl border border-slate-700/80 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation"
-        >
-          <Home className="w-4 h-4" />
-          <span>HOME</span>
-        </button>
+        {/* Secondary Actions */}
+        <div className="w-full grid grid-cols-2 gap-2">
+          {onOpenLevelSelect && (
+            <button
+              onClick={onOpenLevelSelect}
+              className="py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs rounded-xl border border-slate-700/80 active:scale-98 transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation"
+            >
+              <List className="w-4 h-4" />
+              <span>SECTORS</span>
+            </button>
+          )}
+
+          <button
+            onClick={onHome}
+            className={`py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs rounded-xl border border-slate-700/80 active:scale-98 transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation ${
+              !onOpenLevelSelect ? 'col-span-2' : ''
+            }`}
+          >
+            <Home className="w-4 h-4" />
+            <span>HOME</span>
+          </button>
+        </div>
       </div>
     </div>
   );

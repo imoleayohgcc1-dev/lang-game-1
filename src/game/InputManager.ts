@@ -14,6 +14,8 @@ export class InputManager {
   public onJump?: () => void;
   public onSlide?: () => void;
   public onShoot?: () => void;
+  public onBomb?: () => void;
+  public onReload?: () => void;
   public onTogglePause?: () => void;
 
   private isEnabled: boolean = true;
@@ -58,6 +60,15 @@ export class InputManager {
         e.preventDefault();
         this.onShoot?.();
         break;
+      case 'KeyB':
+      case 'KeyG':
+        e.preventDefault();
+        this.onBomb?.();
+        break;
+      case 'KeyR':
+        e.preventDefault();
+        this.onReload?.();
+        break;
       case 'Escape':
       case 'KeyP':
         e.preventDefault();
@@ -85,22 +96,19 @@ export class InputManager {
       const absX = Math.abs(deltaX);
       const absY = Math.abs(deltaY);
 
-      // Horizontal gesture is dominant
-      if (absX > this.minSwipeDistance && absX > absY * 1.15) {
-        if (deltaX < 0) {
-          this.onMoveLeft?.();
+      if (absX >= this.minSwipeDistance || absY >= this.minSwipeDistance) {
+        if (absX > absY) {
+          if (deltaX > 0) {
+            this.onMoveRight?.();
+          } else {
+            this.onMoveLeft?.();
+          }
         } else {
-          this.onMoveRight?.();
-        }
-      } 
-      // Vertical gesture is dominant
-      else if (absY > this.minSwipeDistance && absY > absX * 1.15) {
-        if (deltaY < 0) {
-          // Swiped Up -> Jump
-          this.onJump?.();
-        } else {
-          // Swiped Down -> Slide
-          this.onSlide?.();
+          if (deltaY < 0) {
+            this.onJump?.();
+          } else {
+            this.onSlide?.();
+          }
         }
       }
     }

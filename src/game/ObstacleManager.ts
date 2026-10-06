@@ -13,10 +13,14 @@ export interface ObstacleInstance {
 
 export class ObstacleManager {
   private scene: THREE.Scene;
-  private pool: ObstacleInstance[] = [];
+  public pool: ObstacleInstance[] = [];
   private poolSize = GAME_CONFIG.OBSTACLE_POOL_SIZE; // 28 instances
   private nextSpawnZ: number = GAME_CONFIG.FIRST_OBSTACLE_Z;
   private animTime: number = 0;
+
+  // Level Progression Difficulty
+  public difficulty: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
+  public gapMultiplier: number = 1.0;
 
   // Shared geometries and materials for zero runtime allocations
   private sharedGeos: Record<string, THREE.BufferGeometry> = {};
@@ -262,11 +266,25 @@ export class ObstacleManager {
     }
   }
 
+  public setDifficulty(difficulty: 'LOW' | 'MEDIUM' | 'HIGH', gapMultiplier: number = 1.0): void {
+    this.difficulty = difficulty;
+    this.gapMultiplier = Math.max(0.5, gapMultiplier);
+  }
+
   /**
    * Procedural obstacle wave generation guaranteeing fair solvability
    */
   public generateWave(zPos: number): void {
-    const waveType = Math.floor(Math.random() * 8);
+    let allowedWaveTypes: number[];
+    if (this.difficulty === 'LOW') {
+      allowedWaveTypes = [0, 1, 2]; // Single Low, High, or Blocking
+    } else if (this.difficulty === 'MEDIUM') {
+      allowedWaveTypes = [0, 1, 2, 3, 4, 5]; // + Moving Sweeper and combo
+    } else {
+      allowedWaveTypes = [0, 1, 2, 3, 4, 5, 6, 7]; // Full range including double obstacles
+    }
+
+    const waveType = allowedWaveTypes[Math.floor(Math.random() * allowedWaveTypes.length)];
     const laneIndices = [0, 1, 2];
     const shuffledLanes = [...laneIndices].sort(() => Math.random() - 0.5);
 
@@ -313,8 +331,9 @@ export class ObstacleManager {
     const lookAheadDistance = 200;
     while (this.nextSpawnZ > playerZ - lookAheadDistance) {
       this.generateWave(this.nextSpawnZ);
-      const gap = GAME_CONFIG.MIN_OBSTACLE_GAP + 
+      const baseGap = GAME_CONFIG.MIN_OBSTACLE_GAP + 
         Math.random() * (GAME_CONFIG.MAX_OBSTACLE_GAP - GAME_CONFIG.MIN_OBSTACLE_GAP);
+      const gap = baseGap * this.gapMultiplier;
       this.nextSpawnZ -= gap;
     }
 
@@ -345,6 +364,19 @@ export class ObstacleManager {
         this.deactivate(obstacle);
       }
     }
+  }
+
+  public isObstacleAhead(playerZ: number, lookaheadDistance: number): boolean {
+    for (let i = 0; i < this.pool.length; i++) {
+      const obstacle = this.pool[i];
+      if (!obstacle.isActive) continue;
+      // In Three.js coordinates, player moves towards negative Z
+      // Ahead means obstacle.zPos < playerZ and >= playerZ - lookaheadDistance
+      if (obstacle.zPos < playerZ && obstacle.zPos >= playerZ - lookaheadDistance) {
+        return true;
+      }
+    }
+    return false;
   }
 
   public deactivate(obstacle: ObstacleInstance): void {

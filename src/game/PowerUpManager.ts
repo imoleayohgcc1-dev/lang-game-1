@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GAME_CONFIG, PowerUpType } from './constants';
+import { PowerUpFrequency } from './levels/levelTypes';
 
 export interface PowerUpInstance {
   mesh: THREE.Group;
@@ -26,6 +27,7 @@ export class PowerUpManager {
   private poolSize = GAME_CONFIG.POWERUPS.POOL_SIZE;
   private animTime: number = 0;
   private nextSpawnZ: number = -60;
+  private frequencyMultiplier: number = 1.0;
 
   // Active status map
   private activePowerUps: Map<PowerUpType, ActivePowerUpState> = new Map();
@@ -155,6 +157,21 @@ export class PowerUpManager {
     p.boundingBox.max.set(pos.x + 0.75, pos.y + 0.75, pos.z + 0.75);
   }
 
+  public setFrequency(frequency: PowerUpFrequency): void {
+    switch (frequency) {
+      case 'GENEROUS':
+        this.frequencyMultiplier = 0.75;
+        break;
+      case 'SPARSE':
+        this.frequencyMultiplier = 1.35;
+        break;
+      case 'STANDARD':
+      default:
+        this.frequencyMultiplier = 1.0;
+        break;
+    }
+  }
+
   /**
    * Procedural power-up wave generator
    */
@@ -167,8 +184,9 @@ export class PowerUpManager {
 
       this.spawn(chosenType, chosenLane, this.nextSpawnZ);
 
-      const gap = GAME_CONFIG.POWERUPS.SPAWN_INTERVAL_MIN + 
+      const baseGap = GAME_CONFIG.POWERUPS.SPAWN_INTERVAL_MIN + 
         Math.random() * (GAME_CONFIG.POWERUPS.SPAWN_INTERVAL_MAX - GAME_CONFIG.POWERUPS.SPAWN_INTERVAL_MIN);
+      const gap = baseGap * this.frequencyMultiplier;
       this.nextSpawnZ -= gap;
     }
   }

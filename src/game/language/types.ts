@@ -1,3 +1,6 @@
+export * from './lessonTypes';
+import { WordLearningStats, LessonSessionStats, XPProgress } from './lessonTypes';
+
 export type LanguageCode = 'en-US' | 'en-GB' | 'zh-CN' | 'fr-FR' | 'es-ES';
 
 export type LanguageDifficulty = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
@@ -7,6 +10,9 @@ export type LanguageChallengeState =
   | 'SHOW_WORD'
   | 'SHOW_TRANSLATION'
   | 'WAITING_FOR_RESPONSE'
+  | 'LISTENING'
+  | 'EVALUATING'
+  | 'TRY_AGAIN'
   | 'COMPLETED'
   | 'FAILED'
   | 'SKIPPED';
@@ -54,11 +60,24 @@ export interface LearningProgress {
   wordsEncountered: string[];
   wordsCompleted: string[];
   currentLesson: number;
+  currentLessonId?: string;
+  completedLessons?: string[];
+  unlockedLessons?: string[];
   currentDifficulty: LanguageDifficulty;
   selectedCategory: string;
   useAITeacher: boolean;
   totalChallengesCompleted: number;
   totalXPEarned: number;
+  // Phase 7: Voice Learning Metrics
+  voiceAttempts: number;
+  voiceSuccesses: number;
+  voiceFailedAttempts: number;
+  // Phase 8: Lessons, Streaks, Mistakes, XP
+  currentStreak: number;
+  highestStreak: number;
+  playerLevel: number;
+  wordStats?: Record<string, WordLearningStats>;
+  activeLessonStats?: LessonSessionStats | null;
 }
 
 export interface LanguageInfo {
@@ -140,9 +159,20 @@ export const DEFAULT_LEARNING_PROGRESS: LearningProgress = {
   wordsEncountered: [],
   wordsCompleted: [],
   currentLesson: 1,
+  currentLessonId: 'zh-CN_lesson_1',
+  completedLessons: [],
+  unlockedLessons: ['zh-CN_lesson_1'],
   currentDifficulty: 'BEGINNER',
   selectedCategory: 'ALL',
   useAITeacher: true,
   totalChallengesCompleted: 0,
   totalXPEarned: 0,
+  voiceAttempts: 0,
+  voiceSuccesses: 0,
+  voiceFailedAttempts: 0,
+  currentStreak: 0,
+  highestStreak: 0,
+  playerLevel: 1,
+  wordStats: {},
+  activeLessonStats: null,
 };

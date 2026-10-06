@@ -357,27 +357,147 @@ export class AudioManager {
   }
 
   /**
-   * Play blaster projectile firing sound
+   * Play blaster projectile firing sound with weapon variations
    */
-  public playShootSound(): void {
+  public playShootSound(weaponType: 'NORMAL' | 'BIG_BULLET' | 'MACHINE_GUN' = 'NORMAL'): void {
     if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(880, now);
-      osc.frequency.exponentialRampToValueAtTime(120, now + 0.12);
+      if (weaponType === 'BIG_BULLET') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.exponentialRampToValueAtTime(60, now + 0.18);
+        gain.gain.setValueAtTime(0.42, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.19);
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+        osc.start(now);
+        osc.stop(now + 0.19);
+      } else if (weaponType === 'MACHINE_GUN') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(1100, now);
+        osc.frequency.exponentialRampToValueAtTime(240, now + 0.05);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+        osc.start(now);
+        osc.stop(now + 0.06);
+      } else {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.exponentialRampToValueAtTime(120, now + 0.12);
+        gain.gain.setValueAtTime(0.28, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+        osc.start(now);
+        osc.stop(now + 0.13);
+      }
+    } catch {
+      // Audio fallback
+    }
+  }
 
-      gain.gain.setValueAtTime(0.28, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+  /**
+   * Play bomb throw whoosh sound
+   */
+  public playBombThrowSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(220, now);
+      osc.frequency.exponentialRampToValueAtTime(680, now + 0.16);
+
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
       osc.connect(gain);
       gain.connect(this.sfxGain);
 
       osc.start(now);
-      osc.stop(now + 0.13);
+      osc.stop(now + 0.18);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Play heavy bomb detonation explosion rumble
+   */
+  public playBombExplosionSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      // Sub-bass thump
+      const subOsc = this.ctx.createOscillator();
+      const subGain = this.ctx.createGain();
+
+      subOsc.type = 'sawtooth';
+      subOsc.frequency.setValueAtTime(150, now);
+      subOsc.frequency.exponentialRampToValueAtTime(25, now + 0.45);
+
+      subGain.gain.setValueAtTime(0.65, now);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+      subOsc.connect(subGain);
+      subGain.connect(this.sfxGain);
+
+      subOsc.start(now);
+      subOsc.stop(now + 0.5);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Play pickup collection sound
+   */
+  public playPickupSound(pickupType: string = 'COIN'): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      if (pickupType === 'HEALTH' || pickupType === 'MAX_HEALTH') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.2);
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      } else if (pickupType === 'BOMB') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(640, now + 0.15);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
+      } else if (pickupType === 'BIG_BULLET' || pickupType === 'MACHINE_GUN') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.exponentialRampToValueAtTime(1040, now + 0.25);
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+      } else {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(987.77, now);
+        osc.frequency.setValueAtTime(1318.51, now + 0.06);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      }
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now);
+      osc.stop(now + 0.28);
     } catch {
       // Audio fallback
     }
@@ -576,6 +696,95 @@ export class AudioManager {
 
         osc.start(startTime);
         osc.stop(startTime + 0.2);
+      });
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Phase 7: Voice Recognition Listening feedback chime (short pleasant beep)
+   */
+  public playListeningSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, now); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.08); // A5
+
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now);
+      osc.stop(now + 0.12);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Phase 7: Voice Correct pronunciation chime (cheerful ascending two-tone)
+   */
+  public playVoiceCorrectSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+      notes.forEach((freq, idx) => {
+        if (!this.ctx || !this.sfxGain) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const startTime = now + idx * 0.06;
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, startTime);
+
+        gain.gain.setValueAtTime(0.22, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.16);
+
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+
+        osc.start(startTime);
+        osc.stop(startTime + 0.16);
+      });
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Phase 7: Voice Try-Again gentle cue (soft two-tone, non-harsh)
+   */
+  public playVoiceTryAgainSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const notes = [440, 392]; // A4 -> G4 gentle descending
+      notes.forEach((freq, idx) => {
+        if (!this.ctx || !this.sfxGain) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const startTime = now + idx * 0.1;
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, startTime);
+
+        gain.gain.setValueAtTime(0.16, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.14);
+
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+
+        osc.start(startTime);
+        osc.stop(startTime + 0.14);
       });
     } catch {
       // Audio fallback

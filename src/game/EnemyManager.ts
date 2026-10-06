@@ -27,6 +27,11 @@ export class EnemyManager {
   private nextSpawnZ: number = GAME_CONFIG.COMBAT.FIRST_ENEMY_Z;
   private animClock: number = 0;
 
+  // Level Progression Difficulty
+  public difficulty: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
+  public spawnRateMultiplier: number = 1.0;
+  public maxActiveEnemies: number = 3;
+
   // Shared geometries
   private sharedGeos: Record<string, THREE.BufferGeometry> = {};
 
@@ -313,28 +318,66 @@ export class EnemyManager {
   }
 
   /**
+   * Checks if any active, undefeated hostile enemy is within distance ahead of player.
+   * Used by LanguageChallengeScheduler to avoid triggering challenges during combat.
+   */
+  public hasActiveEnemyNear(playerZ: number, lookAheadDistance: number = 20.0): boolean {
+    for (let i = 0; i < this.pool.length; i++) {
+      const enemy = this.pool[i];
+      if (!enemy.isActive || enemy.isDefeated) continue;
+      const dz = playerZ - enemy.mesh.position.z;
+      if (dz > 0.5 && dz <= lookAheadDistance) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  public setDifficulty(
+    difficulty: 'LOW' | 'MEDIUM' | 'HIGH',
+    spawnRateMultiplier: number = 1.0,
+    maxActiveEnemies: number = 3
+  ): void {
+    this.difficulty = difficulty;
+    this.spawnRateMultiplier = Math.max(0.2, spawnRateMultiplier);
+    this.maxActiveEnemies = Math.max(1, Math.min(this.poolSize, maxActiveEnemies));
+  }
+
+  /**
    * Spawn procedural enemy waves ahead of player
    * Guarantees solvability alongside obstacle patterns
    */
   public generateWave(playerZ: number): void {
     const lookAhead = 190;
     while (this.nextSpawnZ > playerZ - lookAhead) {
-      // Pick enemy type based on distance/progression
-      const roll = Math.random();
-      let type: EnemyType = 'BASIC';
-      if (roll > 0.7) {
-        type = 'ARMORED';
-      } else if (roll > 0.35) {
-        type = 'FAST';
+      // Check maximum active enemies limit
+      const currentActiveCount = this.pool.filter((e) => e.isActive && !e.isDefeated).length;
+      if (currentActiveCount < this.maxActiveEnemies) {
+        // Pick enemy type based on level difficulty
+        let type: EnemyType = 'BASIC';
+        const roll = Math.random();
+
+        if (this.difficulty === 'HIGH') {
+          if (roll > 0.75) {
+            type = 'ARMORED';
+          } else if (roll > 0.4) {
+            type = 'FAST';
+          }
+        } else if (this.difficulty === 'MEDIUM') {
+          if (roll > 0.65) {
+            type = 'FAST';
+          }
+        } // LOW difficulty stays 100% BASIC
+
+        // Pick lane (0, 1, or 2)
+        const lane = Math.floor(Math.random() * 3);
+        this.spawn(type, lane, this.nextSpawnZ);
       }
 
-      // Pick lane (0, 1, or 2)
-      const lane = Math.floor(Math.random() * 3);
-      this.spawn(type, lane, this.nextSpawnZ);
-
-      // Spacing gap
-      const gap = GAME_CONFIG.COMBAT.MIN_SPAWN_GAP + 
+      // Spacing gap scaled by spawn rate
+      const baseGap = GAME_CONFIG.COMBAT.MIN_SPAWN_GAP + 
         Math.random() * (GAME_CONFIG.COMBAT.MAX_SPAWN_GAP - GAME_CONFIG.COMBAT.MIN_SPAWN_GAP);
+      const gap = baseGap / this.spawnRateMultiplier;
       this.nextSpawnZ -= gap;
     }
   }

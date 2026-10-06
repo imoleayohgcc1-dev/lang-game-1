@@ -12,9 +12,10 @@ import { HUD } from './components/HUD';
 import { PauseModal } from './components/PauseModal';
 import { SettingsModal } from './components/SettingsModal';
 import { GameOverModal } from './components/GameOverModal';
-import { LanguageSelectModal } from './components/LanguageSelectModal';
+import { LevelCompleteModal } from './components/LevelCompleteModal';
+import { LevelSelectModal } from './components/LevelSelectModal';
 import { WebGLFallback } from './components/WebGLFallback';
-import { LanguageCode, LanguageDifficulty, DEFAULT_LEARNING_PROGRESS } from './game/language/types';
+import { LevelCompletionStats } from './game/levels/levelTypes';
 import { Award } from 'lucide-react';
 
 export default function App() {
@@ -40,16 +41,25 @@ export default function App() {
     maxAmmo: 10,
     isReloading: false,
     hasTargetLock: false,
-    activePowerUps: [],
-    languageChallenge: {
-      state: 'IDLE',
-      item: null,
-      progress: DEFAULT_LEARNING_PROGRESS,
+    weapon: {
+      type: 'NORMAL',
+      name: 'Normal Blaster',
+      damage: 1,
+      ammo: 10,
+      maxAmmo: 10,
+      isReloading: false,
+      remainingDuration: 0,
+      maxDuration: 0,
+      hudLabel: 'NORMAL',
     },
+    bombs: 3,
+    maxBombs: 5,
+    activePowerUps: [],
   });
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  const [isLanguageSelectOpen, setIsLanguageSelectOpen] = useState<boolean>(false);
+  const [isLevelSelectOpen, setIsLevelSelectOpen] = useState<boolean>(false);
+  const [completedLevelStats, setCompletedLevelStats] = useState<LevelCompletionStats | null>(null);
   const [webGLError, setWebGLError] = useState<string | null>(null);
 
   const initGame = useCallback(() => {
@@ -70,6 +80,10 @@ export default function App() {
       gm.stateManager.subscribe((newState) => {
         setGameState(newState);
       });
+
+      gm.onLevelCompleted = (stats) => {
+        setCompletedLevelStats(stats);
+      };
 
       gm.achievementManager.onAchievementUnlocked = (ach) => {
         setAchievements([...gm.achievementManager.getAchievements()]);
@@ -170,40 +184,32 @@ export default function App() {
     gameManagerRef.current?.shoot();
   };
 
+  const handleBomb = () => {
+    gameManagerRef.current?.throwBomb();
+  };
+
   const handleReload = () => {
     gameManagerRef.current?.triggerReload();
   };
 
-  const handleSelectLanguage = (code: LanguageCode) => {
-    gameManagerRef.current?.setLanguage(code);
+  const handleNextLevel = () => {
+    setCompletedLevelStats(null);
+    gameManagerRef.current?.startNextLevel();
   };
 
-  const handleSelectDifficulty = (difficulty: LanguageDifficulty) => {
-    gameManagerRef.current?.setLanguageDifficulty(difficulty);
+  const handleReplayLevel = () => {
+    setCompletedLevelStats(null);
+    gameManagerRef.current?.restartCurrentLevel();
   };
 
-  const handleSelectCategory = (category: string) => {
-    gameManagerRef.current?.setLanguageCategory(category);
+  const handleSelectLevel = (levelNumber: number) => {
+    setCompletedLevelStats(null);
+    gameManagerRef.current?.startLevel(levelNumber);
   };
 
-  const handleToggleAITeacher = (enabled: boolean) => {
-    gameManagerRef.current?.setUseAITeacher(enabled);
+  const handleContinueRunningLevel = () => {
+    setCompletedLevelStats(null);
   };
-
-  const handlePlayPronunciation = () => {
-    gameManagerRef.current?.playLanguagePronunciation();
-  };
-
-  const handleCompleteLanguageChallenge = () => {
-    gameManagerRef.current?.completeLanguageChallenge();
-  };
-
-  const currentLanguageCode: LanguageCode =
-    metrics.languageChallenge?.progress.targetLanguageCode || 'zh-CN';
-  const currentLearningProgress =
-    metrics.languageChallenge?.progress || DEFAULT_LEARNING_PROGRESS;
-  const currentAIStatus =
-    metrics.languageChallenge?.aiTeacherStatus || 'READY';
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-slate-950 select-none">
@@ -243,8 +249,16 @@ export default function App() {
           onOpenSettings={() => setIsSettingsOpen(true)}
           isMuted={isMuted}
           onToggleMute={handleToggleMute}
-          currentLanguage={currentLanguageCode}
-          onOpenLanguageSelect={() => setIsLanguageSelectOpen(true)}
+          currentLevel={
+            metrics.levelProgress
+              ? {
+                  levelNumber: metrics.levelProgress.levelNumber,
+                  levelName: metrics.levelProgress.levelName,
+                  stars: gameManagerRef.current?.levelManager.getLevelStars(metrics.levelProgress.levelNumber),
+                }
+              : undefined
+          }
+          onOpenLevelSelect={() => setIsLevelSelectOpen(true)}
         />
       )}
 
@@ -258,9 +272,8 @@ export default function App() {
           onJump={handleJump}
           onSlide={handleSlide}
           onShoot={handleShoot}
+          onBomb={handleBomb}
           onReload={handleReload}
-          onPlayPronunciation={handlePlayPronunciation}
-          onCompleteLanguageChallenge={handleCompleteLanguageChallenge}
         />
       )}
 
@@ -273,8 +286,7 @@ export default function App() {
           onOpenSettings={() => setIsSettingsOpen(true)}
           isMuted={isMuted}
           onToggleMute={handleToggleMute}
-          currentLanguage={currentLanguageCode}
-          onOpenLanguageSelect={() => setIsLanguageSelectOpen(true)}
+          onOpenLevelSelect={() => setIsLevelSelectOpen(true)}
         />
       )}
 
@@ -284,6 +296,7 @@ export default function App() {
           metrics={metrics}
           onRetry={handleRestart}
           onHome={handleHome}
+          onOpenLevelSelect={() => setIsLevelSelectOpen(true)}
         />
       )}
 
@@ -294,26 +307,38 @@ export default function App() {
         settings={settings}
         onUpdateSettings={handleUpdateSettings}
         achievements={achievements}
-        currentLanguage={currentLanguageCode}
-        learningProgress={currentLearningProgress}
-        aiTeacherStatus={currentAIStatus}
-        onSelectLanguage={handleSelectLanguage}
-        onSelectDifficulty={handleSelectDifficulty}
-        onSelectCategory={handleSelectCategory}
-        onToggleAITeacher={handleToggleAITeacher}
       />
 
-      {/* Target Language Selection Modal */}
-      <LanguageSelectModal
-        isOpen={isLanguageSelectOpen}
-        onClose={() => setIsLanguageSelectOpen(false)}
-        currentLanguage={currentLanguageCode}
-        progress={currentLearningProgress}
-        aiTeacherStatus={currentAIStatus}
-        onSelectLanguage={handleSelectLanguage}
-        onSelectDifficulty={handleSelectDifficulty}
-        onSelectCategory={handleSelectCategory}
-        onToggleAITeacher={handleToggleAITeacher}
+      {/* Level Complete Results Modal */}
+      {completedLevelStats && (
+        <LevelCompleteModal
+          stats={completedLevelStats}
+          onNextLevel={handleNextLevel}
+          onReplayLevel={handleReplayLevel}
+          onOpenLevelSelect={() => setIsLevelSelectOpen(true)}
+          onContinueRunning={handleContinueRunningLevel}
+        />
+      )}
+
+      {/* Level Select Modal (Sector Selector) */}
+      <LevelSelectModal
+        isOpen={isLevelSelectOpen}
+        onClose={() => setIsLevelSelectOpen(false)}
+        levels={gameManagerRef.current?.levelManager.getAllLevels() || []}
+        progress={
+          gameManagerRef.current?.levelManager.progress || {
+            unlockedLevels: [1],
+            completedLevels: [],
+            currentLevelNumber: 1,
+            bestScores: {},
+            bestDistances: {},
+            stars: {},
+            totalLevelCoins: 0,
+            totalLevelXP: 0,
+          }
+        }
+        currentLevelNumber={metrics.levelProgress?.levelNumber || 1}
+        onSelectLevel={handleSelectLevel}
       />
     </main>
   );

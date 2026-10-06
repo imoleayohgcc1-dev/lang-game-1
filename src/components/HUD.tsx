@@ -13,11 +13,12 @@ import {
   Magnet,
   Shield,
   Sparkles,
+  Bomb,
+  Flame,
 } from 'lucide-react';
 import { GameMetrics } from '../game/GameManager';
 import { PowerUpType } from '../game/constants';
 import { TemporaryMessage } from './TemporaryMessage';
-import { LanguageChallengeBar } from './LanguageChallengeBar';
 
 interface HUDProps {
   metrics: GameMetrics;
@@ -27,9 +28,8 @@ interface HUDProps {
   onJump: () => void;
   onSlide: () => void;
   onShoot: () => void;
+  onBomb: () => void;
   onReload: () => void;
-  onPlayPronunciation?: () => void;
-  onCompleteLanguageChallenge?: () => void;
 }
 
 export const HUD: React.FC<HUDProps> = ({
@@ -40,11 +40,10 @@ export const HUD: React.FC<HUDProps> = ({
   onJump,
   onSlide,
   onShoot,
+  onBomb,
   onReload,
-  onPlayPronunciation,
-  onCompleteLanguageChallenge,
 }) => {
-  const getPowerUpIcon = (type: PowerUpType) => {
+  const getPowerUpIcon = (type: PowerUpType | string) => {
     switch (type) {
       case 'MAGNET':
         return <Magnet className="w-3.5 h-3.5 text-cyan-400" />;
@@ -52,17 +51,27 @@ export const HUD: React.FC<HUDProps> = ({
         return <Shield className="w-3.5 h-3.5 text-emerald-400" />;
       case 'COIN_MULTIPLIER':
         return <Sparkles className="w-3.5 h-3.5 text-amber-400" />;
+      case 'BIG_BULLET':
+        return <Flame className="w-3.5 h-3.5 text-amber-500" />;
+      case 'MACHINE_GUN':
+        return <Zap className="w-3.5 h-3.5 text-rose-400" />;
+      case 'BOMB':
+        return <Bomb className="w-3.5 h-3.5 text-purple-400" />;
+      default:
+        return <Sparkles className="w-3.5 h-3.5 text-cyan-400" />;
     }
   };
+
+  const activeWeapon = metrics.weapon;
 
   return (
     <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-2 sm:p-4 z-10 select-none">
       {/* 
         ========================================================================
         SAFE_HUD_AREA: Top Header Container
-        Only location where permanent dashboard metrics and temporary gameplay,
-        target lock, or language prompts are displayed.
-        Never overlaps or obscures the road, obstacles, enemies, or player.
+        Only location where dashboard metrics, combat indicators, weapon status,
+        bombs, and level progression are displayed.
+        Never overlaps or obscures the road, hurdles, enemies, or player.
         ========================================================================
       */}
       <header
@@ -70,10 +79,10 @@ export const HUD: React.FC<HUDProps> = ({
         data-testid="safe-hud-area"
         className="w-full max-w-4xl mx-auto flex flex-col gap-1.5 sm:gap-2 pointer-events-auto pt-[env(safe-area-inset-top,0.25rem)]"
       >
-        {/* Row 1: Permanent Metrics Bar */}
+        {/* Row 1: Dashboard Metrics Bar */}
         <div className="flex items-center justify-between w-full gap-2">
-          {/* Left Cluster: Score & Coins Dashboard */}
-          <div className="flex items-center gap-2 sm:gap-3 bg-slate-950/90 backdrop-blur-md px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-2xl border border-slate-800/90 shadow-lg">
+          {/* Left Cluster: Score & Coins */}
+          <div className="flex items-center gap-2 sm:gap-3 bg-slate-950/90 backdrop-blur-md px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-2xl border border-slate-800/90 shadow-lg shrink-0">
             {/* Score */}
             <div className="flex flex-col">
               <span className="text-[8px] sm:text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
@@ -102,17 +111,21 @@ export const HUD: React.FC<HUDProps> = ({
             </div>
           </div>
 
-          {/* Center Cluster: Health & Ammunition & Target Lock Indicator */}
-          <div className="flex items-center gap-1.5 sm:gap-3 bg-slate-950/90 backdrop-blur-md px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-2xl border border-slate-800/90 shadow-lg">
-            {/* Health Hearts */}
-            <div className="flex items-center gap-0.5 sm:gap-1" aria-label={`Health: ${metrics.health} of ${metrics.maxHealth}`}>
+          {/* Center Cluster: Combat Status (Health, Ammo, Weapon, Bombs, Target Lock) */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 bg-slate-950/90 backdrop-blur-md px-2 sm:px-3.5 py-1.5 sm:py-2 rounded-2xl border border-slate-800/90 shadow-lg flex-wrap justify-center">
+            {/* Health Hearts (Displays 3 to 5 hearts dynamically) */}
+            <div
+              className="flex items-center gap-0.5 sm:gap-1"
+              aria-label={`Health: ${metrics.health} of ${metrics.maxHealth}`}
+              title={`Health: ${metrics.health}/${metrics.maxHealth}`}
+            >
               {Array.from({ length: metrics.maxHealth }).map((_, i) => (
                 <Heart
                   key={i}
-                  className={`w-3.5 h-3.5 sm:w-5 sm:h-5 transition-all duration-300 ${
+                  className={`w-3.5 h-3.5 sm:w-4.5 sm:h-4.5 transition-all duration-300 ${
                     i < metrics.health
-                      ? 'fill-rose-500 text-rose-500 drop-shadow-[0_0_8px_rgba(244,63,94,0.6)]'
-                      : 'text-slate-700 fill-slate-900/60'
+                      ? 'fill-rose-500 text-rose-500 drop-shadow-[0_0_8px_rgba(244,63,94,0.6)] scale-105'
+                      : 'text-slate-700 fill-slate-900/60 scale-95'
                   }`}
                 />
               ))}
@@ -140,10 +153,46 @@ export const HUD: React.FC<HUDProps> = ({
               </span>
             </button>
 
-            {/* Unobtrusive Target Lock Pill (In Header SAFE_HUD_AREA - Never blocks gameplay road) */}
+            <div className="w-[1px] h-4 sm:h-5 bg-slate-800" />
+
+            {/* Weapon Badge */}
+            {activeWeapon && (
+              <div
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg border text-[9px] sm:text-[11px] font-bold ${
+                  activeWeapon.type === 'BIG_BULLET'
+                    ? 'bg-amber-950/80 border-amber-500 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.3)] animate-pulse'
+                    : activeWeapon.type === 'MACHINE_GUN'
+                    ? 'bg-rose-950/80 border-rose-500 text-rose-300 shadow-[0_0_10px_rgba(244,63,94,0.3)] animate-pulse'
+                    : 'bg-slate-900/80 border-slate-700 text-slate-300'
+                }`}
+                title={`Active Weapon: ${activeWeapon.name}`}
+              >
+                <span>{activeWeapon.hudLabel || activeWeapon.name}</span>
+                {activeWeapon.remainingDuration > 0 && (
+                  <span className="font-mono text-[9px] text-amber-400 ml-0.5">
+                    {Math.ceil(activeWeapon.remainingDuration)}s
+                  </span>
+                )}
+              </div>
+            )}
+
+            <div className="w-[1px] h-4 sm:h-5 bg-slate-800" />
+
+            {/* Bombs Counter */}
+            <div
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-purple-950/70 border border-purple-500/40 text-purple-300"
+              title={`EMP Bombs: ${metrics.bombs} of ${metrics.maxBombs}`}
+            >
+              <Bomb className="w-3 h-3 text-purple-400" />
+              <span className="text-[10px] sm:text-xs font-mono font-bold">
+                {metrics.bombs}/{metrics.maxBombs}
+              </span>
+            </div>
+
+            {/* Target Lock Pill */}
             {metrics.hasTargetLock && (
               <div
-                className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-md bg-rose-950/90 border border-rose-500/60 text-[9px] sm:text-[10px] font-bold text-rose-300 shadow-sm animate-pulse"
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-rose-950/90 border border-rose-500/70 text-[9px] sm:text-[10px] font-bold text-rose-300 shadow-sm animate-pulse"
                 title={`Target Acquired: ${metrics.targetEnemyName || 'Enemy Drone'}`}
               >
                 <Crosshair className="w-3 h-3 text-rose-400 shrink-0" />
@@ -153,7 +202,7 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
 
           {/* Right Cluster: Distance/Speed & Pause */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <div className="hidden md:flex items-center gap-1.5 bg-slate-950/80 backdrop-blur-md px-2.5 py-1.5 rounded-2xl border border-slate-800 text-xs text-slate-300 font-mono-nums">
               <span className="font-semibold text-cyan-300">{metrics.distance}m</span>
               <span className="text-slate-600">·</span>
@@ -170,7 +219,42 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
         </div>
 
-        {/* Row 2: Active Power-Ups Row (Subtle, non-intrusive compact chips) */}
+        {/* Row 2: Level Progress Indicator */}
+        {metrics.levelProgress && (
+          <div
+            id="LEVEL_PROGRESS_HUD"
+            data-testid="level-progress-hud"
+            className="flex items-center justify-between gap-2 px-3 py-1 bg-slate-950/85 backdrop-blur-md rounded-xl border border-indigo-900/60 text-[10px] sm:text-xs shadow-sm"
+          >
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="px-1.5 py-0.5 rounded bg-indigo-500/25 text-indigo-300 font-extrabold text-[9px] sm:text-[10px] uppercase tracking-wider border border-indigo-500/40 shrink-0">
+                LEVEL {metrics.levelProgress.levelNumber}
+              </span>
+              <span className="text-white font-bold truncate">
+                {metrics.levelProgress.levelName}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1.5 font-mono text-slate-300">
+                <span className="font-bold text-[10px] sm:text-xs text-indigo-200">
+                  {metrics.levelProgress.currentDistance} / {metrics.levelProgress.targetDistance} m
+                </span>
+                <div className="w-16 sm:w-24 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-all duration-300"
+                    style={{ width: `${Math.min(100, metrics.levelProgress.progressPercentage)}%` }}
+                  />
+                </div>
+                <span className="font-bold text-[9px] sm:text-[10px] text-slate-400 min-w-[28px] text-right">
+                  {metrics.levelProgress.progressPercentage}%
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Row 3: Active Power-Ups Row (Subtle, non-intrusive compact chips) */}
         {metrics.activePowerUps && metrics.activePowerUps.length > 0 && (
           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             {metrics.activePowerUps.map((p) => {
@@ -197,27 +281,17 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
         )}
 
-        {/* Row 3: Temporary Message Sub-Slot (Phase 5A Safe Messaging) */}
+        {/* Row 4: Temporary Message Sub-Slot (Safe Header Area, Never Blocks Runway) */}
         {metrics.currentMessage && (
           <TemporaryMessage message={metrics.currentMessage} />
-        )}
-
-        {/* Row 4: Language Challenge Bar (Phase 5B Learning Prompt) */}
-        {metrics.languageChallenge && metrics.languageChallenge.state !== 'IDLE' && (
-          <LanguageChallengeBar
-            state={metrics.languageChallenge.state}
-            item={metrics.languageChallenge.item}
-            onPlayPronunciation={onPlayPronunciation || (() => {})}
-            onComplete={onCompleteLanguageChallenge || (() => {})}
-          />
         )}
       </header>
 
       {/* 
         ========================================================================
         CENTER GAMEPLAY AREA: 100% CLEAR OF ANY OVERLAYS
-        The road, hurdles, gantries, blocking pillars, moving barriers,
-        drones, coins, power-ups, and player remain completely unobstructed!
+        Runway, hurdles, gantries, enemies, projectiles, and pickups remain
+        completely unobstructed for responsive action gameplay!
         ========================================================================
       */}
       <div className="flex-1 pointer-events-none" aria-hidden="true" />
@@ -225,11 +299,11 @@ export const HUD: React.FC<HUDProps> = ({
       {/* 
         ========================================================================
         BOTTOM CONTROLS BAR: Mobile Thumb Clusters
-        Positioned at outer bottom corners to keep the central road visible.
+        Positioned at outer bottom corners to keep central road clearly visible.
         ========================================================================
       */}
       <footer className="flex items-end justify-between w-full max-w-4xl mx-auto pb-[env(safe-area-inset-bottom,0.25rem)] pointer-events-none">
-        {/* Left Thumb Cluster: Lateral Lane Movement */}
+        {/* Left Thumb Cluster: Lateral Movement */}
         <div className="pointer-events-auto flex items-center gap-1.5 sm:gap-2">
           <button
             onClick={onMoveLeft}
@@ -250,29 +324,47 @@ export const HUD: React.FC<HUDProps> = ({
           </button>
         </div>
 
-        {/* Right Thumb Cluster: SHOOT, JUMP & SLIDE */}
+        {/* Right Thumb Cluster: BOMB, SLIDE, JUMP, SHOOT */}
         <div className="pointer-events-auto flex items-center gap-1.5 sm:gap-2">
+          {/* BOMB BUTTON */}
+          <button
+            onClick={onBomb}
+            aria-label="Throw EMP Bomb"
+            disabled={metrics.bombs <= 0}
+            className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl shadow-xl backdrop-blur-md active:scale-90 transition-all touch-manipulation flex flex-col items-center justify-center cursor-pointer border ${
+              metrics.bombs <= 0
+                ? 'bg-slate-900/60 border-slate-800 text-slate-600 opacity-60'
+                : 'bg-gradient-to-b from-purple-600 to-indigo-800 hover:from-purple-500 hover:to-indigo-700 border-purple-400/80 text-white shadow-purple-600/30'
+            }`}
+            title="Throw EMP Bomb (Keys B / G)"
+          >
+            <Bomb className="w-4 h-4 sm:w-5 sm:h-5 text-purple-200" />
+            <span className="text-[8px] sm:text-[9px] font-extrabold text-purple-200 -mt-0.5">
+              {metrics.bombs > 0 ? `BOMB (${metrics.bombs})` : 'EMPTY'}
+            </span>
+          </button>
+
           {/* SLIDE */}
           <button
             onClick={onSlide}
             aria-label="Slide Under Obstacle"
-            className="w-13 h-13 sm:w-15 sm:h-15 bg-slate-950/85 hover:bg-slate-900 active:bg-indigo-950/80 border border-slate-700/70 active:border-indigo-400/80 text-white rounded-2xl shadow-xl backdrop-blur-md active:scale-90 transition-all touch-manipulation flex flex-col items-center justify-center cursor-pointer"
+            className="w-12 h-12 sm:w-14 sm:h-14 bg-slate-950/85 hover:bg-slate-900 active:bg-indigo-950/80 border border-slate-700/70 active:border-indigo-400/80 text-white rounded-2xl shadow-xl backdrop-blur-md active:scale-90 transition-all touch-manipulation flex flex-col items-center justify-center cursor-pointer"
           >
-            <ArrowDown className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400" />
-            <span className="text-[9px] font-bold text-indigo-300 -mt-0.5">SLIDE</span>
+            <ArrowDown className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />
+            <span className="text-[8px] sm:text-[9px] font-bold text-indigo-300 -mt-0.5">SLIDE</span>
           </button>
 
           {/* JUMP */}
           <button
             onClick={onJump}
             aria-label="Jump Over Obstacle"
-            className="w-13 h-13 sm:w-15 sm:h-15 bg-gradient-to-b from-cyan-600/90 to-blue-700/90 hover:from-cyan-500 hover:to-blue-600 active:from-cyan-400 active:to-blue-500 border border-cyan-400/60 text-white rounded-2xl shadow-xl shadow-cyan-500/20 backdrop-blur-md active:scale-90 transition-all touch-manipulation flex flex-col items-center justify-center cursor-pointer"
+            className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-b from-cyan-600/90 to-blue-700/90 hover:from-cyan-500 hover:to-blue-600 active:from-cyan-400 active:to-blue-500 border border-cyan-400/60 text-white rounded-2xl shadow-xl shadow-cyan-500/20 backdrop-blur-md active:scale-90 transition-all touch-manipulation flex flex-col items-center justify-center cursor-pointer"
           >
-            <ArrowUp className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-            <span className="text-[9px] font-extrabold text-cyan-100 -mt-0.5">JUMP</span>
+            <ArrowUp className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+            <span className="text-[8px] sm:text-[9px] font-extrabold text-cyan-100 -mt-0.5">JUMP</span>
           </button>
 
-          {/* SHOOT BUTTON (Visually signals target lock right at the player's thumb) */}
+          {/* SHOOT BUTTON */}
           <button
             onClick={onShoot}
             aria-label="Shoot Blaster"
@@ -284,6 +376,7 @@ export const HUD: React.FC<HUDProps> = ({
                 ? 'bg-gradient-to-b from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 border-rose-400 text-white shadow-rose-600/40 animate-pulse'
                 : 'bg-gradient-to-b from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 border-amber-300/70 text-white shadow-orange-500/30'
             }`}
+            title="Shoot Weapon (Key F)"
           >
             {metrics.isReloading ? (
               <>

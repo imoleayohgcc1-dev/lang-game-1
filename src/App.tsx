@@ -200,27 +200,43 @@ export default function App() {
     gameManagerRef.current?.triggerReload();
   };
 
-  const handleNextLevel = () => {
+  const handleNextLevel = useCallback(async () => {
     const stats = completedLevelStats;
     setCompletedLevelStats(null);
     if (!gameManagerRef.current) return;
     const nextLevelNum = (stats?.levelNumber || 1) + 1;
-    if (gameManagerRef.current.levelManager.isLevelUnlocked(nextLevelNum)) {
-      gameManagerRef.current.startNextLevel();
-    } else {
-      handleRequestAdUnlockLevel(nextLevelNum);
+
+    // 1 reward ad automatically plays when changing level
+    const result = await AdManager.getInstance().showRewardedAd('LEVEL_UNLOCK_REWARD');
+    if (result.success && result.earnedReward) {
+      gameManagerRef.current.levelManager.recordAdWatchedForLevel(nextLevelNum);
     }
-  };
+    gameManagerRef.current.startLevel(nextLevelNum);
+  }, [completedLevelStats]);
 
   const handleReplayLevel = () => {
     setCompletedLevelStats(null);
     gameManagerRef.current?.restartCurrentLevel();
   };
 
-  const handleSelectLevel = (levelNumber: number) => {
+  const handleSelectLevel = useCallback(async (levelNumber: number) => {
     setCompletedLevelStats(null);
-    gameManagerRef.current?.startLevel(levelNumber);
-  };
+    setIsLevelSelectOpen(false);
+    if (!gameManagerRef.current) return;
+
+    const currentLevelNum = gameManagerRef.current.levelManager.getCurrentLevel().levelNumber;
+    const isLevelChange = levelNumber !== currentLevelNum || levelNumber > 1;
+
+    // 1 reward ad automatically plays when changing/selecting level
+    if (isLevelChange) {
+      const result = await AdManager.getInstance().showRewardedAd('LEVEL_START_REWARD');
+      if (result.success && result.earnedReward) {
+        gameManagerRef.current.levelManager.recordAdWatchedForLevel(levelNumber);
+      }
+    }
+
+    gameManagerRef.current.startLevel(levelNumber);
+  }, []);
 
   const handleContinueRunningLevel = () => {
     setCompletedLevelStats(null);
@@ -247,22 +263,19 @@ export default function App() {
   const handleRequestAdStartLevel = useCallback(async (levelNumber: number) => {
     setIsLevelSelectOpen(false);
     const result = await AdManager.getInstance().showRewardedAd('LEVEL_START_REWARD');
-    if (result.success && result.earnedReward) {
-      handleSelectLevel(levelNumber);
-      gameManagerRef.current?.playerHealthManager.activateShield(7.0);
+    if (result.success && result.earnedReward && gameManagerRef.current) {
+      gameManagerRef.current.levelManager.recordAdWatchedForLevel(levelNumber);
+      gameManagerRef.current.startLevel(levelNumber);
+      gameManagerRef.current.playerHealthManager.activateShield(7.0);
     }
   }, []);
 
   const handleRequestAdUnlockLevel = useCallback(async (levelNumber: number) => {
+    setIsLevelSelectOpen(false);
     const result = await AdManager.getInstance().showRewardedAd('LEVEL_UNLOCK_REWARD');
     if (result.success && result.earnedReward && gameManagerRef.current) {
-      const outcome = gameManagerRef.current.levelManager.recordAdWatchedForLevel(levelNumber);
-      if (outcome.unlocked) {
-        setIsLevelSelectOpen(false);
-        handleSelectLevel(levelNumber);
-      } else {
-        gameManagerRef.current.broadcastMetrics();
-      }
+      gameManagerRef.current.levelManager.recordAdWatchedForLevel(levelNumber);
+      gameManagerRef.current.startLevel(levelNumber);
     }
   }, []);
 

@@ -127,6 +127,10 @@ export class LevelManager {
     }
   }
 
+  public getCurrentLevel(): LevelDefinition {
+    return this.currentLevel;
+  }
+
   public getLevel(levelNumber: number): LevelDefinition {
     const found = INITIAL_LEVELS.find((l) => l.levelNumber === levelNumber);
     if (found) {
@@ -167,9 +171,9 @@ export class LevelManager {
       ? levelNumberOrId
       : parseInt(levelNumberOrId.replace(/\D/g, ''), 10) || 1;
 
-    // Safety: ensure unlocked (requires 2 reward ads for level > 1)
+    // Safety: ensure unlocked (requires 1 reward ad for level > 1)
     if (!this.isLevelUnlocked(num)) {
-      console.warn(`[LevelManager] Attempted to start locked level ${num} (requires 2 reward ads)`);
+      console.warn(`[LevelManager] Attempted to start locked level ${num} (requires 1 reward ad)`);
       const unlockedList = this.progress.unlockedLevels.filter((l) => this.isLevelUnlocked(l));
       const highest = unlockedList.length > 0 ? Math.max(...unlockedList) : 1;
       return this.startLevel(highest);
@@ -347,7 +351,7 @@ export class LevelManager {
     this.progress.totalLevelCoins += totalCoins;
     this.progress.totalLevelXP += totalXP;
 
-    // Check if Next Level is unlocked via 2 reward ads
+    // Check if Next Level is unlocked via 1 reward ad
     const nextLevelNum = levelNum + 1;
     const adsForNext = this.progress.adUnlockProgress?.[nextLevelNum] || 0;
     const nextLevelUnlocked = adsForNext >= ADS_REQUIRED_TO_UNLOCK_LEVEL;

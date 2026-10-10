@@ -5,7 +5,7 @@ import {
 
 export const LEVEL_PROGRESS_STORAGE_KEY = 'action_runner_level_progress';
 
-export const ADS_REQUIRED_TO_UNLOCK_LEVEL = 2; // 2 reward ads required to unlock each locked level
+export const ADS_REQUIRED_TO_UNLOCK_LEVEL = 1; // 1 reward ad required to unlock/change each level
 export const MAX_LEVEL_DURATION_SECONDS = 240; // 4 minutes max per level (strictly within 3-5 minutes max)
 export const TARGET_MAX_LEVEL_DURATION_SECONDS = 210; // 3.5 minutes target cap
 

@@ -164,23 +164,13 @@ export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
           {/* Primary Action: NEXT LEVEL */}
           <button
             onClick={onNextLevel}
-            className={`w-full py-3.5 px-4 rounded-2xl shadow-lg active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation font-bold text-base text-white ${
-              stats.nextLevelUnlocked
-                ? 'bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-500 hover:from-indigo-400 hover:via-cyan-400 hover:to-emerald-400 shadow-cyan-500/25'
-                : 'bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:via-orange-400 hover:to-rose-400 shadow-orange-500/25'
-            }`}
+            className="w-full py-3.5 px-4 rounded-2xl shadow-lg active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation font-bold text-base text-white bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-500 hover:from-indigo-400 hover:via-cyan-400 hover:to-emerald-400 shadow-cyan-500/25"
           >
-            {stats.nextLevelUnlocked ? (
-              <>
-                <span>NEXT LEVEL</span>
-                <ArrowRight className="w-5 h-5" />
-              </>
-            ) : (
-              <>
-                <Tv className="w-5 h-5" />
-                <span>WATCH 2 ADS TO UNLOCK LEVEL {stats.nextLevelNumber || stats.levelNumber + 1}</span>
-              </>
-            )}
+            <span>NEXT LEVEL</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/35 font-mono text-cyan-200 border border-cyan-400/30">
+              1 REWARD AD
+            </span>
+            <ArrowRight className="w-5 h-5" />
           </button>
 
           {/* Secondary Actions Row */}

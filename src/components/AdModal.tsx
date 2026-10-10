@@ -64,7 +64,7 @@ export const AdModal: React.FC<AdModalProps> = ({
       case 'LEVEL_START_REWARD':
         return 'Watch this brief transmission to immediately deploy into your chosen sector with full combat readiness.';
       case 'LEVEL_UNLOCK_REWARD':
-        return 'Watch this transmission to progress toward unlocking this sector (2 reward ads required to unlock).';
+        return 'Sponsored transmission in progress. Completing this transmission automatically launches this sector (1 reward ad required).';
       case 'REWARDED_RETRY':
         return 'Watch this transmission to restore 50% health, clear nearby hazards, and resume your run!';
       default:

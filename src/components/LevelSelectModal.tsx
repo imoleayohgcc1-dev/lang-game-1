@@ -170,57 +170,27 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
                     </span>
                   </div>
 
-                  {/* Action Buttons: Standard Start & Rewarded Ad Start */}
+                  {/* Action Button: 1-click start with automatic 1 reward ad for changing level */}
                   <div>
-                    {isUnlocked ? (
-                      <div className="flex items-center gap-2 flex-wrap justify-end">
-                        <button
-                          onClick={() => {
-                            onSelectLevel(lvl.levelNumber);
-                            onClose();
-                          }}
-                          className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                            isCurrent
-                              ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md'
-                              : 'bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white'
-                          }`}
-                        >
-                          <Play className="w-3 h-3 fill-current" />
-                          <span>{isCurrent ? 'START LEVEL' : 'RUN'}</span>
-                        </button>
-
-                        {onRequestAdStartLevel && (
-                          <button
-                            onClick={() => {
-                              onRequestAdStartLevel(lvl.levelNumber);
-                            }}
-                            className="px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md cursor-pointer transition-all active:scale-95"
-                            title="Watch sponsored transmission to immediately deploy into this sector"
-                          >
-                            <Tv className="w-3 h-3" />
-                            <span>WATCH AD TO START</span>
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 flex-wrap justify-end">
-                        {onRequestAdUnlockLevel && (
-                          <button
-                            onClick={() => onRequestAdUnlockLevel(lvl.levelNumber)}
-                            className="px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:via-orange-400 hover:to-rose-400 text-white shadow-md active:scale-95 transition-all cursor-pointer"
-                            title="Watch 2 rewarded ads to unlock this sector"
-                          >
-                            <Tv className="w-3.5 h-3.5" />
-                            <span>
-                              WATCH AD TO UNLOCK ({progress.adUnlockProgress?.[lvl.levelNumber] || 0}/2)
-                            </span>
-                          </button>
-                        )}
-                        <span className="text-[10px] text-amber-400/90 font-mono">
-                          Watch 2 reward ads to unlock
+                    <button
+                      onClick={() => {
+                        onSelectLevel(lvl.levelNumber);
+                        onClose();
+                      }}
+                      className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-md ${
+                        isCurrent
+                          ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                          : 'bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:via-orange-400 hover:to-rose-400 text-white border border-amber-300/40 shadow-orange-500/20'
+                      }`}
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>{isCurrent ? 'RESTART' : 'PLAY LEVEL'}</span>
+                      {!isCurrent && (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-black/40 font-mono font-bold text-amber-200">
+                          1 AD
                         </span>
-                      </div>
-                    )}
+                      )}
+                    </button>
                   </div>
                 </div>
 

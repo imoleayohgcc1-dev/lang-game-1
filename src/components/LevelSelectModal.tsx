@@ -23,6 +23,7 @@ interface LevelSelectModalProps {
   currentLevelNumber: number;
   onSelectLevel: (levelNumber: number) => void;
   onRequestAdStartLevel?: (levelNumber: number) => void;
+  onRequestAdUnlockLevel?: (levelNumber: number) => void;
 }
 
 export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
@@ -33,6 +34,7 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
   currentLevelNumber,
   onSelectLevel,
   onRequestAdStartLevel,
+  onRequestAdUnlockLevel,
 }) => {
   if (!isOpen) return null;
 
@@ -201,9 +203,23 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
                         )}
                       </div>
                     ) : (
-                      <span className="text-[10px] text-slate-600 font-mono">
-                        Clear Level {lvl.levelNumber - 1} to unlock
-                      </span>
+                      <div className="flex items-center gap-2 flex-wrap justify-end">
+                        {onRequestAdUnlockLevel && (
+                          <button
+                            onClick={() => onRequestAdUnlockLevel(lvl.levelNumber)}
+                            className="px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:via-orange-400 hover:to-rose-400 text-white shadow-md active:scale-95 transition-all cursor-pointer"
+                            title="Watch 2 rewarded ads to unlock this sector"
+                          >
+                            <Tv className="w-3.5 h-3.5" />
+                            <span>
+                              WATCH AD TO UNLOCK ({progress.adUnlockProgress?.[lvl.levelNumber] || 0}/2)
+                            </span>
+                          </button>
+                        )}
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          Clear Level {lvl.levelNumber - 1} or watch 2 ads
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>

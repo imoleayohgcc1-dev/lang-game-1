@@ -446,6 +446,14 @@ export const HUD: React.FC<HUDProps> = ({
           </button>
         </div>
 
+        {/* Center Mobile Hint: Double-Tap Screen to Shoot */}
+        <div className="pointer-events-none pb-2 flex flex-col items-center">
+          <span className="text-[9px] font-bold text-slate-300 bg-slate-950/80 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-slate-700/60 shadow-sm flex items-center gap-1 sm:hidden">
+            <Crosshair className="w-2.5 h-2.5 text-amber-400" />
+            Double-tap screen to shoot
+          </span>
+        </div>
+
         {/* Right Thumb Cluster: BOMB, SLIDE, JUMP, SHOOT */}
         <div className="pointer-events-auto flex items-center gap-1.5 sm:gap-2">
           {/* BOMB BUTTON */}

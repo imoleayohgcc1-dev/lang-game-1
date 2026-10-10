@@ -11,7 +11,8 @@ export type AdPlacement =
   | 'BONUS_REWARD'
   | 'LEVEL_START_REWARD'
   | 'REWARDED_RETRY'
-  | 'DOUBLE_COINS';
+  | 'DOUBLE_COINS'
+  | 'LEVEL_UNLOCK_REWARD';
 
 export interface RewardedAdResult {
   success: boolean;
@@ -69,6 +70,10 @@ export const AD_CONFIG: AdConfig = {
     DOUBLE_COINS: {
       enabled: true,
       rewardType: 'DOUBLE_COINS',
+    },
+    LEVEL_UNLOCK_REWARD: {
+      enabled: true,
+      rewardType: 'UNLOCK_LEVEL',
     },
   },
 };

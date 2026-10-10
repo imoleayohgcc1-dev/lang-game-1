@@ -8,6 +8,13 @@ export class InputManager {
   private minSwipeDistance: number = 28; // px
   private maxSwipeTime: number = 550; // ms
 
+  // Mobile double-tap screen shooting
+  private lastTapTime: number = 0;
+  private lastTapX: number = 0;
+  private lastTapY: number = 0;
+  private doubleTapMaxInterval: number = 350; // ms
+  private doubleTapMaxDistance: number = 75; // px
+
   // Callbacks
   public onMoveLeft?: () => void;
   public onMoveRight?: () => void;
@@ -119,6 +126,28 @@ export class InputManager {
           } else {
             this.onSlide?.();
           }
+        }
+      } else {
+        // Tap detected (not a swipe). Check for mobile double-tap to shoot!
+        const now = performance.now();
+        const timeSinceLastTap = now - this.lastTapTime;
+        const distFromLastTap = Math.hypot(touch.clientX - this.lastTapX, touch.clientY - this.lastTapY);
+
+        if (timeSinceLastTap > 40 && timeSinceLastTap <= this.doubleTapMaxInterval && distFromLastTap <= this.doubleTapMaxDistance) {
+          // Double-tap confirmed! Shoot weapon
+          this.lastTapTime = 0; // Reset so 3rd tap isn't immediately counted
+          const screenWidth = window.innerWidth || 360;
+          if (touch.clientX < screenWidth * 0.42) {
+            this.onShoot?.('LEFT');
+          } else if (touch.clientX > screenWidth * 0.58) {
+            this.onShoot?.('RIGHT');
+          } else {
+            this.onShoot?.('AUTO');
+          }
+        } else {
+          this.lastTapTime = now;
+          this.lastTapX = touch.clientX;
+          this.lastTapY = touch.clientY;
         }
       }
     }

@@ -11,6 +11,8 @@ import {
   DEFAULT_LEVEL_PROGRESS,
   LEVEL_PROGRESS_STORAGE_KEY,
   generateProceduralLevel,
+  ADS_REQUIRED_TO_UNLOCK_LEVEL,
+  MAX_LEVEL_DURATION_SECONDS,
 } from './levelConfig';
 
 export class LevelManager {
@@ -68,6 +70,7 @@ export class LevelManager {
             bestScores: parsed.bestScores || {},
             bestDistances: parsed.bestDistances || {},
             stars: parsed.stars || {},
+            adUnlockProgress: parsed.adUnlockProgress || {},
           };
         }
       }
@@ -75,6 +78,37 @@ export class LevelManager {
       console.warn('[LevelManager] Failed to load level progress:', e);
     }
     return { ...DEFAULT_LEVEL_PROGRESS };
+  }
+
+  public getAdUnlockProgress(levelNumber: number): number {
+    return this.progress.adUnlockProgress?.[levelNumber] || 0;
+  }
+
+  public recordAdWatchedForLevel(levelNumber: number): {
+    current: number;
+    required: number;
+    unlocked: boolean;
+  } {
+    if (!this.progress.adUnlockProgress) {
+      this.progress.adUnlockProgress = {};
+    }
+    const current = (this.progress.adUnlockProgress[levelNumber] || 0) + 1;
+    this.progress.adUnlockProgress[levelNumber] = current;
+
+    let unlocked = false;
+    if (current >= ADS_REQUIRED_TO_UNLOCK_LEVEL) {
+      if (!this.progress.unlockedLevels.includes(levelNumber)) {
+        this.progress.unlockedLevels.push(levelNumber);
+        this.progress.unlockedLevels.sort((a, b) => a - b);
+        unlocked = true;
+      }
+    }
+    this.saveProgress();
+    return {
+      current,
+      required: ADS_REQUIRED_TO_UNLOCK_LEVEL,
+      unlocked,
+    };
   }
 
   public saveProgress(): void {
@@ -201,10 +235,12 @@ export class LevelManager {
       }
     }
 
-    const isDistReached = currentDist >= targetDist;
+    // Max duration cap: each level never exceeds 3-5 minutes max (capped at 300s)
+    const isTimeLimitReached = this.levelElapsedTime >= MAX_LEVEL_DURATION_SECONDS;
+    const isDistReached = currentDist >= targetDist || isTimeLimitReached;
     const req = this.currentLevel.completionRequirements;
-    const isCoinsMet = (req.requiredCoins || 0) <= stats.coins;
-    const isEnemiesMet = (req.requiredEnemiesDefeated || 0) <= stats.enemiesDefeated;
+    const isCoinsMet = isTimeLimitReached || (req.requiredCoins || 0) <= stats.coins;
+    const isEnemiesMet = isTimeLimitReached || (req.requiredEnemiesDefeated || 0) <= stats.enemiesDefeated;
 
     const isComplete = isDistReached && isCoinsMet && isEnemiesMet;
 
@@ -213,7 +249,7 @@ export class LevelManager {
       levelName: this.currentLevel.levelName,
       currentDistance: currentDist,
       targetDistance: targetDist,
-      progressPercentage: progressPct,
+      progressPercentage: isTimeLimitReached ? 100 : progressPct,
       isComplete,
       score: stats.score,
       coinsEarned: stats.coins,

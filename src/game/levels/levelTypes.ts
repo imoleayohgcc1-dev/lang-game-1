@@ -70,6 +70,7 @@ export interface LevelProgressState {
   stars: Record<number, number>; // 0 to 3 stars
   totalLevelCoins: number;
   totalLevelXP: number;
+  adUnlockProgress?: Record<number, number>;
 }
 
 export interface LevelRuntimeProgress {

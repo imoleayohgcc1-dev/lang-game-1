@@ -1321,7 +1321,7 @@ export class GameManager {
     this.sceneManager.render();
   };
 
-  private broadcastMetrics(): void {
+  public broadcastMetrics(): void {
     if (this.onMetricsUpdate) {
       const powerUps = [...this.powerUpManager.getActivePowerUps()];
       this.pickupManager.getActiveEffects().forEach((eff) => {

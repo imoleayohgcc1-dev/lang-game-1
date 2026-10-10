@@ -48,6 +48,8 @@ export const AdModal: React.FC<AdModalProps> = ({
     switch (placement) {
       case 'LEVEL_START_REWARD':
         return 'REWARDED LEVEL ACCESS';
+      case 'LEVEL_UNLOCK_REWARD':
+        return 'REWARDED SECTOR UNLOCK';
       case 'REWARDED_RETRY':
         return 'REWARDED RUN REVIVAL';
       case 'DOUBLE_COINS':
@@ -61,6 +63,8 @@ export const AdModal: React.FC<AdModalProps> = ({
     switch (placement) {
       case 'LEVEL_START_REWARD':
         return 'Watch this brief transmission to immediately deploy into your chosen sector with full combat readiness.';
+      case 'LEVEL_UNLOCK_REWARD':
+        return 'Watch this transmission to progress toward unlocking this sector (2 reward ads required to unlock).';
       case 'REWARDED_RETRY':
         return 'Watch this transmission to restore 50% health, clear nearby hazards, and resume your run!';
       default:

@@ -244,6 +244,27 @@ export default function App() {
     }
   }, []);
 
+  const handleRequestAdUnlockLevel = useCallback(async (levelNumber: number) => {
+    const result = await AdManager.getInstance().showRewardedAd('LEVEL_UNLOCK_REWARD');
+    if (result.success && result.earnedReward && gameManagerRef.current) {
+      const outcome = gameManagerRef.current.levelManager.recordAdWatchedForLevel(levelNumber);
+      if (outcome.unlocked) {
+        gameManagerRef.current.showMessage(
+          `🎉 LEVEL ${levelNumber} UNLOCKED VIA 2 REWARD ADS!`,
+          3500,
+          'success'
+        );
+      } else {
+        gameManagerRef.current.showMessage(
+          `✨ AD ${outcome.current}/${outcome.required} WATCHED! WATCH 1 MORE TO UNLOCK LEVEL ${levelNumber}!`,
+          3500,
+          'powerup'
+        );
+      }
+      gameManagerRef.current.broadcastMetrics();
+    }
+  }, []);
+
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-slate-950 select-none">
       {/* Three.js Canvas Container */}
@@ -375,6 +396,7 @@ export default function App() {
         currentLevelNumber={metrics.levelProgress?.levelNumber || 1}
         onSelectLevel={handleSelectLevel}
         onRequestAdStartLevel={handleRequestAdStartLevel}
+        onRequestAdUnlockLevel={handleRequestAdUnlockLevel}
       />
 
       {/* Rewarded Ad Transmission Modal (Phase 14) */}

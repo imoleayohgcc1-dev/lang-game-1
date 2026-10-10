@@ -1,22 +1,20 @@
 import React from 'react';
-import { RotateCcw, Home, Trophy, CircleDot, Flame, List, Target, Tv, Sparkles } from 'lucide-react';
+import { Home, Trophy, CircleDot, Flame, List, Target, Tv } from 'lucide-react';
 import { GameMetrics } from '../game/GameManager';
 
 interface GameOverModalProps {
   metrics: GameMetrics;
-  onRetry: () => void;
+  onAdRetry: () => void;
   onHome: () => void;
   onOpenLevelSelect?: () => void;
-  onRewardedRetry?: () => void;
   canRewardedRetry?: boolean;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
   metrics,
-  onRetry,
+  onAdRetry,
   onHome,
   onOpenLevelSelect,
-  onRewardedRetry,
   canRewardedRetry = true,
 }) => {
   const isNewRecord = metrics.score >= metrics.highScore && metrics.score > 0;
@@ -119,31 +117,20 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           </div>
         </div>
 
-        {/* Rewarded Retry Action (Phase 14) */}
-        {onRewardedRetry && (
-          <button
-            onClick={canRewardedRetry ? onRewardedRetry : undefined}
-            disabled={!canRewardedRetry}
-            className={`w-full py-3 px-5 mb-2.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md touch-manipulation ${
-              canRewardedRetry
-                ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:via-orange-400 hover:to-rose-400 text-white shadow-orange-500/25 active:scale-98 cursor-pointer'
-                : 'bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed opacity-70'
-            }`}
-          >
-            <Tv className="w-4 h-4" />
-            <span>
-              {canRewardedRetry ? 'WATCH AD TO CONTINUE (+50% HP)' : 'CONTINUE (1/1 USED)'}
-            </span>
-          </button>
-        )}
-
-        {/* Primary Action: RETRY */}
+        {/* Mandatory Rewarded Retry: No normal retry button. Player must watch 1 ad to retry */}
         <button
-          onClick={onRetry}
-          className="w-full py-3.5 px-6 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:via-blue-500 hover:to-indigo-500 text-white font-bold text-base rounded-2xl shadow-lg shadow-cyan-500/25 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation mb-2.5"
+          onClick={onAdRetry}
+          className="w-full py-3.5 px-5 mb-3 rounded-2xl font-bold text-sm bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:via-orange-400 hover:to-rose-400 text-white shadow-lg shadow-orange-500/25 active:scale-98 transition-all flex items-center justify-center gap-2.5 cursor-pointer touch-manipulation border border-amber-300/40"
         >
-          <RotateCcw className="w-5 h-5" />
-          <span>RETRY NORMALLY</span>
+          <Tv className="w-4 h-4" />
+          <span>
+            {canRewardedRetry
+              ? 'WATCH 1 AD TO RETRY (+50% HP)'
+              : 'WATCH 1 AD TO RETRY LEVEL'}
+          </span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/30 font-mono font-extrabold text-amber-200">
+            1 AD
+          </span>
         </button>
 
         {/* Secondary Actions */}

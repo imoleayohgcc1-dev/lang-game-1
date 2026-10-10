@@ -6,8 +6,8 @@ import {
 export const LEVEL_PROGRESS_STORAGE_KEY = 'action_runner_level_progress';
 
 export const ADS_REQUIRED_TO_UNLOCK_LEVEL = 2; // 2 reward ads required to unlock each locked level
-export const MAX_LEVEL_DURATION_SECONDS = 300; // 5 minutes max per level
-export const TARGET_MAX_LEVEL_DURATION_SECONDS = 240; // 4 minutes target cap
+export const MAX_LEVEL_DURATION_SECONDS = 240; // 4 minutes max per level (strictly within 3-5 minutes max)
+export const TARGET_MAX_LEVEL_DURATION_SECONDS = 210; // 3.5 minutes target cap
 
 export const DEFAULT_LEVEL_PROGRESS: LevelProgressState = {
   unlockedLevels: [1],
@@ -283,8 +283,8 @@ export function generateProceduralLevel(levelNumber: number): LevelDefinition {
   const env = environments[(levelNumber - 1) % environments.length];
   const dn = dayNights[Math.floor((levelNumber - 1) / 2) % dayNights.length];
 
-  // Cap target distance so level duration stays strictly under 3-5 minutes max
-  const targetDistance = Math.min(3500, 1800 + (levelNumber - 5) * 180);
+  // Cap target distance so level duration stays strictly under 5 minutes max
+  const targetDistance = Math.min(2800, 1600 + (levelNumber - 5) * 120);
   const startingSpeed = Math.min(27.0, 24.0 + (levelNumber - 5) * 0.4);
   const maximumSpeed = Math.min(33.0, 30.0 + (levelNumber - 5) * 0.5);
 

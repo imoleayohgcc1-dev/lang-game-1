@@ -11,6 +11,7 @@ import {
   Play,
   Flame,
   Crosshair,
+  Tv,
 } from 'lucide-react';
 import { LevelCompletionStats } from '../game/levels/levelTypes';
 
@@ -79,11 +80,16 @@ export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
           })}
         </div>
 
-        {/* Next Level Unlocked Banner */}
-        {stats.nextLevelUnlocked && (
+        {/* Next Level Status Banner */}
+        {stats.nextLevelUnlocked ? (
           <div className="w-full flex items-center justify-center gap-2 py-2 px-3 mb-3 rounded-xl bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-indigo-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow-sm animate-pulse">
             <Sparkles className="w-4 h-4 text-emerald-400" />
             <span>LEVEL {stats.nextLevelNumber || stats.levelNumber + 1} UNLOCKED!</span>
+          </div>
+        ) : (
+          <div className="w-full flex items-center justify-center gap-2 py-2 px-3 mb-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold shadow-sm">
+            <Tv className="w-4 h-4 text-amber-400" />
+            <span>LEVEL {stats.nextLevelNumber || stats.levelNumber + 1}: 2 REWARD ADS TO UNLOCK</span>
           </div>
         )}
 
@@ -158,10 +164,23 @@ export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
           {/* Primary Action: NEXT LEVEL */}
           <button
             onClick={onNextLevel}
-            className="w-full py-3.5 px-4 bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-500 hover:from-indigo-400 hover:via-cyan-400 hover:to-emerald-400 text-white font-bold text-base rounded-2xl shadow-lg shadow-cyan-500/25 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation"
+            className={`w-full py-3.5 px-4 rounded-2xl shadow-lg active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation font-bold text-base text-white ${
+              stats.nextLevelUnlocked
+                ? 'bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-500 hover:from-indigo-400 hover:via-cyan-400 hover:to-emerald-400 shadow-cyan-500/25'
+                : 'bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:via-orange-400 hover:to-rose-400 shadow-orange-500/25'
+            }`}
           >
-            <span>NEXT LEVEL</span>
-            <ArrowRight className="w-5 h-5" />
+            {stats.nextLevelUnlocked ? (
+              <>
+                <span>NEXT LEVEL</span>
+                <ArrowRight className="w-5 h-5" />
+              </>
+            ) : (
+              <>
+                <Tv className="w-5 h-5" />
+                <span>WATCH 2 ADS TO UNLOCK LEVEL {stats.nextLevelNumber || stats.levelNumber + 1}</span>
+              </>
+            )}
           </button>
 
           {/* Secondary Actions Row */}

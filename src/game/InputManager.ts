@@ -5,15 +5,16 @@ export class InputManager {
   private touchStartX: number = 0;
   private touchStartY: number = 0;
   private touchStartTime: number = 0;
-  private minSwipeDistance: number = 28; // px
+  private minSwipeDistance: number = 32; // px
   private maxSwipeTime: number = 550; // ms
 
   // Mobile double-tap screen shooting
   private lastTapTime: number = 0;
   private lastTapX: number = 0;
   private lastTapY: number = 0;
-  private doubleTapMaxInterval: number = 350; // ms
-  private doubleTapMaxDistance: number = 75; // px
+  private doubleTapMaxInterval: number = 480; // ms (relaxed for fluid phone tapping)
+  private doubleTapMaxDistance: number = 110; // px (generous touch drift margin)
+  private isDoubleTapHandled: boolean = false;
 
   // Callbacks
   public onMoveLeft?: () => void;
@@ -34,8 +35,10 @@ export class InputManager {
 
   private bindEvents(): void {
     window.addEventListener('keydown', this.handleKeyDown);
-    this.element.addEventListener('touchstart', this.handleTouchStart, { passive: true });
-    this.element.addEventListener('touchend', this.handleTouchEnd, { passive: true });
+    // Bind to window so touches anywhere on mobile phone screen are captured
+    window.addEventListener('touchstart', this.handleTouchStart, { passive: true });
+    window.addEventListener('touchend', this.handleTouchEnd, { passive: true });
+    window.addEventListener('dblclick', this.handleDoubleClick);
   }
 
   private handleKeyDown = (e: KeyboardEvent): void => {
@@ -94,16 +97,70 @@ export class InputManager {
     }
   };
 
+  private handleDoubleClick = (e: MouseEvent): void => {
+    if (!this.isEnabled) return;
+    if ((e.target as HTMLElement)?.closest('button, [role="button"], input, a')) return;
+    const screenWidth = window.innerWidth || 360;
+    if (e.clientX < screenWidth * 0.4) {
+      this.onShoot?.('LEFT');
+    } else if (e.clientX > screenWidth * 0.6) {
+      this.onShoot?.('RIGHT');
+    } else {
+      this.onShoot?.('AUTO');
+    }
+  };
+
   private handleTouchStart = (e: TouchEvent): void => {
     if (!this.isEnabled || e.touches.length === 0) return;
+    // Don't intercept touches on buttons
+    if ((e.target as HTMLElement)?.closest('button, [role="button"], input, a')) return;
+
     const touch = e.touches[0];
     this.touchStartX = touch.clientX;
     this.touchStartY = touch.clientY;
     this.touchStartTime = performance.now();
+
+    const now = performance.now();
+    const timeSinceLastTap = now - this.lastTapTime;
+    const distFromLastTap = Math.hypot(touch.clientX - this.lastTapX, touch.clientY - this.lastTapY);
+
+    if (
+      timeSinceLastTap > 30 &&
+      timeSinceLastTap <= this.doubleTapMaxInterval &&
+      distFromLastTap <= this.doubleTapMaxDistance
+    ) {
+      // Rapid double-tap detected on touchstart! Fire weapon immediately for responsive feel
+      this.isDoubleTapHandled = true;
+      this.lastTapTime = 0;
+      this.lastTapX = 0;
+      this.lastTapY = 0;
+
+      const screenWidth = window.innerWidth || 360;
+      if (touch.clientX < screenWidth * 0.4) {
+        this.onShoot?.('LEFT');
+      } else if (touch.clientX > screenWidth * 0.6) {
+        this.onShoot?.('RIGHT');
+      } else {
+        this.onShoot?.('AUTO');
+      }
+    } else {
+      this.isDoubleTapHandled = false;
+      this.lastTapTime = now;
+      this.lastTapX = touch.clientX;
+      this.lastTapY = touch.clientY;
+    }
   };
 
   private handleTouchEnd = (e: TouchEvent): void => {
     if (!this.isEnabled || e.changedTouches.length === 0) return;
+    if ((e.target as HTMLElement)?.closest('button, [role="button"], input, a')) return;
+
+    if (this.isDoubleTapHandled) {
+      // Suppress swipe detection if this was a double-tap
+      this.isDoubleTapHandled = false;
+      return;
+    }
+
     const touch = e.changedTouches[0];
     const deltaX = touch.clientX - this.touchStartX;
     const deltaY = touch.clientY - this.touchStartY;
@@ -127,28 +184,6 @@ export class InputManager {
             this.onSlide?.();
           }
         }
-      } else {
-        // Tap detected (not a swipe). Check for mobile double-tap to shoot!
-        const now = performance.now();
-        const timeSinceLastTap = now - this.lastTapTime;
-        const distFromLastTap = Math.hypot(touch.clientX - this.lastTapX, touch.clientY - this.lastTapY);
-
-        if (timeSinceLastTap > 40 && timeSinceLastTap <= this.doubleTapMaxInterval && distFromLastTap <= this.doubleTapMaxDistance) {
-          // Double-tap confirmed! Shoot weapon
-          this.lastTapTime = 0; // Reset so 3rd tap isn't immediately counted
-          const screenWidth = window.innerWidth || 360;
-          if (touch.clientX < screenWidth * 0.42) {
-            this.onShoot?.('LEFT');
-          } else if (touch.clientX > screenWidth * 0.58) {
-            this.onShoot?.('RIGHT');
-          } else {
-            this.onShoot?.('AUTO');
-          }
-        } else {
-          this.lastTapTime = now;
-          this.lastTapX = touch.clientX;
-          this.lastTapY = touch.clientY;
-        }
       }
     }
   };
@@ -159,7 +194,8 @@ export class InputManager {
 
   public dispose(): void {
     window.removeEventListener('keydown', this.handleKeyDown);
-    this.element.removeEventListener('touchstart', this.handleTouchStart);
-    this.element.removeEventListener('touchend', this.handleTouchEnd);
+    window.removeEventListener('touchstart', this.handleTouchStart);
+    window.removeEventListener('touchend', this.handleTouchEnd);
+    window.removeEventListener('dblclick', this.handleDoubleClick);
   }
 }

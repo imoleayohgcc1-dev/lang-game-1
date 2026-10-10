@@ -60,17 +60,23 @@ export class LevelManager {
         const stored = localStorage.getItem(LEVEL_PROGRESS_STORAGE_KEY);
         if (stored) {
           const parsed = JSON.parse(stored);
+          const adUnlockProgress = parsed.adUnlockProgress || {};
+          // Only level 1 is free; any subsequent level requires 2 reward ads
+          const validUnlocked = (parsed.unlockedLevels || [1]).filter(
+            (lvl: number) => lvl <= 1 || (adUnlockProgress[lvl] || 0) >= ADS_REQUIRED_TO_UNLOCK_LEVEL
+          );
+          if (!validUnlocked.includes(1)) {
+            validUnlocked.push(1);
+          }
           return {
             ...DEFAULT_LEVEL_PROGRESS,
             ...parsed,
-            unlockedLevels: parsed.unlockedLevels && parsed.unlockedLevels.length > 0
-              ? parsed.unlockedLevels
-              : [1],
+            unlockedLevels: validUnlocked,
             completedLevels: parsed.completedLevels || [],
             bestScores: parsed.bestScores || {},
             bestDistances: parsed.bestDistances || {},
             stars: parsed.stars || {},
-            adUnlockProgress: parsed.adUnlockProgress || {},
+            adUnlockProgress,
           };
         }
       }
@@ -100,8 +106,8 @@ export class LevelManager {
       if (!this.progress.unlockedLevels.includes(levelNumber)) {
         this.progress.unlockedLevels.push(levelNumber);
         this.progress.unlockedLevels.sort((a, b) => a - b);
-        unlocked = true;
       }
+      unlocked = true;
     }
     this.saveProgress();
     return {
@@ -142,7 +148,7 @@ export class LevelManager {
 
   public isLevelUnlocked(levelNumber: number): boolean {
     if (levelNumber <= 1) return true;
-    return this.progress.unlockedLevels.includes(levelNumber);
+    return (this.progress.adUnlockProgress?.[levelNumber] || 0) >= ADS_REQUIRED_TO_UNLOCK_LEVEL;
   }
 
   public isLevelCompleted(levelNumber: number): boolean {
@@ -161,10 +167,11 @@ export class LevelManager {
       ? levelNumberOrId
       : parseInt(levelNumberOrId.replace(/\D/g, ''), 10) || 1;
 
-    // Safety: ensure unlocked
+    // Safety: ensure unlocked (requires 2 reward ads for level > 1)
     if (!this.isLevelUnlocked(num)) {
-      console.warn(`[LevelManager] Attempted to start locked level ${num}, falling back to highest unlocked.`);
-      const highest = Math.max(1, ...this.progress.unlockedLevels);
+      console.warn(`[LevelManager] Attempted to start locked level ${num} (requires 2 reward ads)`);
+      const unlockedList = this.progress.unlockedLevels.filter((l) => this.isLevelUnlocked(l));
+      const highest = unlockedList.length > 0 ? Math.max(...unlockedList) : 1;
       return this.startLevel(highest);
     }
 
@@ -340,12 +347,12 @@ export class LevelManager {
     this.progress.totalLevelCoins += totalCoins;
     this.progress.totalLevelXP += totalXP;
 
-    // Unlock Next Level
+    // Check if Next Level is unlocked via 2 reward ads
     const nextLevelNum = levelNum + 1;
-    let nextLevelUnlocked = false;
-    if (!this.progress.unlockedLevels.includes(nextLevelNum)) {
+    const adsForNext = this.progress.adUnlockProgress?.[nextLevelNum] || 0;
+    const nextLevelUnlocked = adsForNext >= ADS_REQUIRED_TO_UNLOCK_LEVEL;
+    if (nextLevelUnlocked && !this.progress.unlockedLevels.includes(nextLevelNum)) {
       this.progress.unlockedLevels.push(nextLevelNum);
-      nextLevelUnlocked = true;
     }
 
     this.saveProgress();

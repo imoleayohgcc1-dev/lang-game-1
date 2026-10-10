@@ -201,8 +201,15 @@ export default function App() {
   };
 
   const handleNextLevel = () => {
+    const stats = completedLevelStats;
     setCompletedLevelStats(null);
-    gameManagerRef.current?.startNextLevel();
+    if (!gameManagerRef.current) return;
+    const nextLevelNum = (stats?.levelNumber || 1) + 1;
+    if (gameManagerRef.current.levelManager.isLevelUnlocked(nextLevelNum)) {
+      gameManagerRef.current.startNextLevel();
+    } else {
+      handleRequestAdUnlockLevel(nextLevelNum);
+    }
   };
 
   const handleReplayLevel = () => {
@@ -226,11 +233,14 @@ export default function App() {
     return unsub;
   }, []);
 
-  const handleRewardedRetry = useCallback(async () => {
-    if (!gameManagerRef.current?.canUseRewardedRetry()) return;
+  const handleWatchAdToRetry = useCallback(async () => {
     const result = await AdManager.getInstance().showRewardedAd('REWARDED_RETRY');
     if (result.success && result.earnedReward) {
-      gameManagerRef.current?.revivePlayerWithReward();
+      if (gameManagerRef.current?.canUseRewardedRetry()) {
+        gameManagerRef.current?.revivePlayerWithReward();
+      } else {
+        gameManagerRef.current?.restart();
+      }
     }
   }, []);
 
@@ -240,7 +250,6 @@ export default function App() {
     if (result.success && result.earnedReward) {
       handleSelectLevel(levelNumber);
       gameManagerRef.current?.playerHealthManager.activateShield(7.0);
-      gameManagerRef.current?.showMessage('🛡️ REWARDED DEPLOY: ENERGY GLOBE ACTIVE (7s)', 2500, 'powerup');
     }
   }, []);
 
@@ -249,19 +258,11 @@ export default function App() {
     if (result.success && result.earnedReward && gameManagerRef.current) {
       const outcome = gameManagerRef.current.levelManager.recordAdWatchedForLevel(levelNumber);
       if (outcome.unlocked) {
-        gameManagerRef.current.showMessage(
-          `🎉 LEVEL ${levelNumber} UNLOCKED VIA 2 REWARD ADS!`,
-          3500,
-          'success'
-        );
+        setIsLevelSelectOpen(false);
+        handleSelectLevel(levelNumber);
       } else {
-        gameManagerRef.current.showMessage(
-          `✨ AD ${outcome.current}/${outcome.required} WATCHED! WATCH 1 MORE TO UNLOCK LEVEL ${levelNumber}!`,
-          3500,
-          'powerup'
-        );
+        gameManagerRef.current.broadcastMetrics();
       }
-      gameManagerRef.current.broadcastMetrics();
     }
   }, []);
 
@@ -273,8 +274,8 @@ export default function App() {
         className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing"
       />
 
-      {/* Achievement Unlocked Toast */}
-      {unlockedToast && (
+      {/* Achievement Unlocked Toast (only outside active gameplay to prevent blocking player screen) */}
+      {unlockedToast && gameState !== 'PLAYING' && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-slate-900/95 border border-amber-400/80 px-4 py-2.5 rounded-2xl shadow-2xl backdrop-blur-md animate-bounce">
           <span className="text-2xl">{unlockedToast.icon}</span>
           <div>
@@ -348,10 +349,9 @@ export default function App() {
       {gameState === 'GAME_OVER' && (
         <GameOverModal
           metrics={metrics}
-          onRetry={handleRestart}
+          onAdRetry={handleWatchAdToRetry}
           onHome={handleHome}
           onOpenLevelSelect={() => setIsLevelSelectOpen(true)}
-          onRewardedRetry={handleRewardedRetry}
           canRewardedRetry={metrics.canRewardedRetry ?? true}
         />
       )}

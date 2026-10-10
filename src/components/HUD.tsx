@@ -384,16 +384,11 @@ export const HUD: React.FC<HUDProps> = ({
             })}
           </div>
         )}
-
-        {/* Row 4: Temporary Message Sub-Slot (Safe Header Area, Never Blocks Runway) */}
-        {metrics.currentMessage && (
-          <TemporaryMessage message={metrics.currentMessage} />
-        )}
       </header>
 
       {/* 
         ========================================================================
-        CENTER GAMEPLAY AREA: 100% CLEAR OF ANY OVERLAYS
+        CENTER GAMEPLAY AREA: 100% CLEAR OF ANY OVERLAYS OR TEXT
         Runway, hurdles, gantries, enemies, projectiles, and pickups remain
         completely unobstructed for responsive action gameplay!
         ========================================================================
@@ -444,14 +439,6 @@ export const HUD: React.FC<HUDProps> = ({
             <ChevronRight className="w-6 h-6 sm:w-7 sm:h-7 text-cyan-400" />
             <span className="text-[9px] font-bold text-slate-400 -mt-1">RIGHT</span>
           </button>
-        </div>
-
-        {/* Center Mobile Hint: Double-Tap Screen to Shoot */}
-        <div className="pointer-events-none pb-2 flex flex-col items-center">
-          <span className="text-[9px] font-bold text-slate-300 bg-slate-950/80 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-slate-700/60 shadow-sm flex items-center gap-1 sm:hidden">
-            <Crosshair className="w-2.5 h-2.5 text-amber-400" />
-            Double-tap screen to shoot
-          </span>
         </div>
 
         {/* Right Thumb Cluster: BOMB, SLIDE, JUMP, SHOOT */}

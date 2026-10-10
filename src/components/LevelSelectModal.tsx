@@ -216,8 +216,8 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
                             </span>
                           </button>
                         )}
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          Clear Level {lvl.levelNumber - 1} or watch 2 ads
+                        <span className="text-[10px] text-amber-400/90 font-mono">
+                          Watch 2 reward ads to unlock
                         </span>
                       </div>
                     )}

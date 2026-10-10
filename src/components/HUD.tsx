@@ -27,7 +27,7 @@ interface HUDProps {
   onMoveRight: () => void;
   onJump: () => void;
   onSlide: () => void;
-  onShoot: () => void;
+  onShoot: (side?: 'LEFT' | 'RIGHT' | 'AUTO') => void;
   onBomb: () => void;
   onReload: () => void;
 }
@@ -113,23 +113,77 @@ export const HUD: React.FC<HUDProps> = ({
 
           {/* Center Cluster: Combat Status (Health, Ammo, Weapon, Bombs, Target Lock) */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 bg-slate-950/90 backdrop-blur-md px-2 sm:px-3.5 py-1.5 sm:py-2 rounded-2xl border border-slate-800/90 shadow-lg flex-wrap justify-center">
-            {/* Health Hearts (Displays 3 to 5 hearts dynamically) */}
+            {/* Unified Player Health Lifespan (❤️ CURRENT_HEALTH / MAX_HEALTH) */}
             <div
-              className="flex items-center gap-0.5 sm:gap-1"
+              className="flex items-center gap-1.5 sm:gap-2 px-2 py-1 rounded-xl bg-slate-900/80 border border-slate-750 shadow-inner"
               aria-label={`Health: ${metrics.health} of ${metrics.maxHealth}`}
-              title={`Health: ${metrics.health}/${metrics.maxHealth}`}
+              title={`Lifespan: ${metrics.health}/${metrics.maxHealth} HP`}
             >
-              {Array.from({ length: metrics.maxHealth }).map((_, i) => (
-                <Heart
-                  key={i}
-                  className={`w-3.5 h-3.5 sm:w-4.5 sm:h-4.5 transition-all duration-300 ${
-                    i < metrics.health
-                      ? 'fill-rose-500 text-rose-500 drop-shadow-[0_0_8px_rgba(244,63,94,0.6)] scale-105'
-                      : 'text-slate-700 fill-slate-900/60 scale-95'
-                  }`}
-                />
-              ))}
+              <Heart
+                className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-all duration-300 ${
+                  metrics.health > 0
+                    ? 'fill-rose-500 text-rose-500 drop-shadow-[0_0_8px_rgba(244,63,94,0.7)] animate-pulse'
+                    : 'text-slate-600 fill-slate-800'
+                }`}
+              />
+              <div className="flex flex-col">
+                <div className="flex items-baseline gap-1">
+                  <span
+                    className={`text-[11px] sm:text-xs font-bold font-mono-nums ${
+                      metrics.health <= 25
+                        ? 'text-rose-400 animate-pulse'
+                        : metrics.health <= 50
+                        ? 'text-amber-300'
+                        : 'text-emerald-300'
+                    }`}
+                  >
+                    {metrics.health}
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-mono-nums">
+                    / {metrics.maxHealth}
+                  </span>
+                </div>
+                <div className="w-12 sm:w-16 h-1.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                  <div
+                    className={`h-full transition-all duration-300 rounded-full ${
+                      metrics.health <= 25
+                        ? 'bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.8)]'
+                        : metrics.health <= 50
+                        ? 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]'
+                        : 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]'
+                    }`}
+                    style={{
+                      width: `${Math.max(
+                        0,
+                        Math.min(100, (metrics.health / Math.max(1, metrics.maxHealth)) * 100)
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
             </div>
+
+            {/* Protective Shield Forcefield Status */}
+            {metrics.shieldStatus?.isActive && (
+              <div
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg border backdrop-blur-md transition-all ${
+                  metrics.shieldStatus.isExpiringSoon
+                    ? 'bg-amber-950/90 border-amber-500 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.5)] animate-pulse'
+                    : 'bg-emerald-950/90 border-emerald-400 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.4)]'
+                }`}
+                title="Protective Shield: Complete Immunity from Damage!"
+              >
+                <Shield className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400/30 animate-pulse" />
+                <div className="flex items-center gap-0.5">
+                  <span className="text-[8px] font-extrabold uppercase text-emerald-300 tracking-wider">
+                    SHIELD
+                  </span>
+                  <span className="text-[9px] font-mono-nums font-bold">
+                    {metrics.shieldStatus.remainingDuration.toFixed(1)}s
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div className="w-[1px] h-4 sm:h-5 bg-slate-800" />
 
@@ -159,7 +213,9 @@ export const HUD: React.FC<HUDProps> = ({
             {activeWeapon && (
               <div
                 className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg border text-[9px] sm:text-[11px] font-bold ${
-                  activeWeapon.type === 'BIG_BULLET'
+                  activeWeapon.type === 'SPECIAL_BOMB'
+                    ? 'bg-fuchsia-950/80 border-fuchsia-400 text-fuchsia-200 shadow-[0_0_12px_rgba(217,70,239,0.4)] animate-pulse'
+                    : activeWeapon.type === 'BIG_BULLET'
                     ? 'bg-amber-950/80 border-amber-500 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.3)] animate-pulse'
                     : activeWeapon.type === 'MACHINE_GUN'
                     ? 'bg-rose-950/80 border-rose-500 text-rose-300 shadow-[0_0_10px_rgba(244,63,94,0.3)] animate-pulse'
@@ -254,26 +310,74 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
         )}
 
+        {/* Row 2.5: Dragon Boss Encounter Indicator (SAFE_HUD_AREA) */}
+        {metrics.dragonStatus && metrics.dragonStatus.isActive && (
+          <div
+            id="DRAGON_BOSS_HUD"
+            data-testid="dragon-boss-hud"
+            className="flex items-center justify-between gap-2 px-3 py-1 bg-purple-950/90 backdrop-blur-md rounded-xl border border-purple-500/60 text-[10px] sm:text-xs shadow-md animate-fade-in"
+          >
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-200 font-extrabold text-[9px] sm:text-[10px] tracking-wider border border-purple-500/50 shrink-0">
+                DRAGON BOSS
+              </span>
+              <span className="text-white font-bold truncate">CYBER WYRM</span>
+              {metrics.dragonStatus.isCharging && (
+                <span className="text-rose-400 font-black animate-pulse text-[9px] sm:text-[10px] ml-1">
+                  ⚠ CHARGING ATTACK!
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="w-20 sm:w-28 h-2 bg-slate-900 rounded-full overflow-hidden border border-purple-900/80">
+                <div
+                  className="h-full bg-gradient-to-r from-purple-500 via-rose-500 to-amber-400 transition-all duration-200"
+                  style={{
+                    width: `${Math.max(
+                      0,
+                      Math.min(100, (metrics.dragonStatus.health / metrics.dragonStatus.maxHealth) * 100)
+                    )}%`,
+                  }}
+                />
+              </div>
+              <span className="font-mono font-bold text-purple-300 text-[10px] min-w-[35px] text-right">
+                {metrics.dragonStatus.health}/{metrics.dragonStatus.maxHealth} HP
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Row 3: Active Power-Ups Row (Subtle, non-intrusive compact chips) */}
         {metrics.activePowerUps && metrics.activePowerUps.length > 0 && (
           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             {metrics.activePowerUps.map((p) => {
               const progressPct = Math.max(0, Math.min(100, (p.remainingDuration / p.maxDuration) * 100));
+              const isShield = p.type === 'SHIELD';
+              const countdownSec = Math.ceil(p.remainingDuration);
               return (
                 <div
                   key={p.type}
-                  className="flex items-center gap-1.5 bg-slate-950/90 border border-slate-700/80 px-2 py-0.5 sm:py-1 rounded-xl backdrop-blur-md shadow-md animate-fade-in"
+                  className={`flex items-center gap-1.5 border px-2.5 py-1 rounded-xl backdrop-blur-md shadow-md transition-all ${
+                    isShield
+                      ? 'bg-emerald-950/90 border-emerald-400/80 shadow-emerald-500/20 animate-pulse'
+                      : 'bg-slate-950/90 border-slate-700/80'
+                  }`}
                 >
                   {getPowerUpIcon(p.type)}
-                  <span className="text-[10px] sm:text-xs font-semibold text-white">{p.name}</span>
-                  <div className="w-8 sm:w-12 h-1 sm:h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <span className={`text-[10px] sm:text-xs font-extrabold uppercase tracking-wide ${isShield ? 'text-emerald-300' : 'text-white'}`}>
+                    {isShield ? `SHIELD ${countdownSec}` : p.name}
+                  </span>
+                  <div className="w-8 sm:w-12 h-1.5 bg-slate-800 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-cyan-400 transition-all duration-200"
+                      className={`h-full transition-all duration-200 ${
+                        isShield ? 'bg-gradient-to-r from-emerald-400 to-cyan-400' : 'bg-cyan-400'
+                      }`}
                       style={{ width: `${progressPct}%` }}
                     />
                   </div>
-                  <span className="text-[9px] sm:text-[10px] font-mono font-bold text-slate-400">
-                    {Math.ceil(p.remainingDuration)}s
+                  <span className="text-[10px] font-mono font-extrabold text-cyan-300">
+                    {countdownSec}s
                   </span>
                 </div>
               );
@@ -303,8 +407,26 @@ export const HUD: React.FC<HUDProps> = ({
         ========================================================================
       */}
       <footer className="flex items-end justify-between w-full max-w-4xl mx-auto pb-[env(safe-area-inset-bottom,0.25rem)] pointer-events-none">
-        {/* Left Thumb Cluster: Lateral Movement */}
+        {/* Left Thumb Cluster: Lateral Movement & Left-Side Shoot */}
         <div className="pointer-events-auto flex items-center gap-1.5 sm:gap-2">
+          {/* LEFT-SIDE SHOOT BUTTON (Phase 13A Left-Side Shooting) */}
+          <button
+            onClick={() => onShoot('LEFT')}
+            aria-label="Left-Side Fire"
+            disabled={metrics.isReloading}
+            className={`w-13 h-13 sm:w-16 sm:h-16 rounded-2xl shadow-2xl backdrop-blur-md active:scale-90 transition-all touch-manipulation flex flex-col items-center justify-center cursor-pointer border ${
+              metrics.isReloading
+                ? 'bg-slate-900/80 border-slate-700 text-slate-500'
+                : 'bg-gradient-to-b from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 border-amber-300/80 text-white shadow-orange-500/30'
+            }`}
+            title="Left-Side Fire (Keys Q / E)"
+          >
+            <Crosshair className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+            <span className="text-[8px] sm:text-[9px] font-extrabold text-amber-100 uppercase tracking-wider -mt-0.5">
+              L-FIRE
+            </span>
+          </button>
+
           <button
             onClick={onMoveLeft}
             aria-label="Move Lane Left"
@@ -364,9 +486,9 @@ export const HUD: React.FC<HUDProps> = ({
             <span className="text-[8px] sm:text-[9px] font-extrabold text-cyan-100 -mt-0.5">JUMP</span>
           </button>
 
-          {/* SHOOT BUTTON */}
+          {/* RIGHT SHOOT BUTTON */}
           <button
-            onClick={onShoot}
+            onClick={() => onShoot('RIGHT')}
             aria-label="Shoot Blaster"
             disabled={metrics.isReloading}
             className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl shadow-2xl backdrop-blur-md active:scale-90 transition-all touch-manipulation flex flex-col items-center justify-center cursor-pointer border ${

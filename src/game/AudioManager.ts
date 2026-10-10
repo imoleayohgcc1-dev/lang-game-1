@@ -1,18 +1,31 @@
+import { MusicManager } from './MusicManager';
+import { MASTER_VOLUME, MUSIC_VOLUME, SFX_VOLUME } from './combatConfig';
+import { WeaponType } from './combatTypes';
+
 export class AudioManager {
-  private ctx: AudioContext | null = null;
+  public ctx: AudioContext | null = null;
   private isMuted: boolean = false;
   private isMusicEnabled: boolean = true;
   private isSoundEnabled: boolean = true;
+  private masterVolume: number = MASTER_VOLUME;
+  private musicVolume: number = MUSIC_VOLUME;
+  private sfxVolume: number = SFX_VOLUME;
+
   private masterGain: GainNode | null = null;
   private musicGain: GainNode | null = null;
   private sfxGain: GainNode | null = null;
+  private priorityGain: GainNode | null = null; // High-priority channel for warnings, explosions & player damage
   private isInitialized: boolean = false;
-  private isMusicPlaying: boolean = false;
-  private musicIntervalId: number | null = null;
-  private beatStep: number = 0;
+
+  // Sound category toggles (Phase 14)
+  public shieldSoundEnabled: boolean = true;
+  public enemyCombatSoundEnabled: boolean = true;
+  private lastShieldImpactTime: number = 0;
+
+  public musicManager: MusicManager;
 
   constructor() {
-    // Initialized on first user interaction
+    this.musicManager = new MusicManager();
   }
 
   public init(): boolean {
@@ -27,16 +40,28 @@ export class AudioManager {
 
       this.ctx = new AudioCtx();
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : 0.7, this.ctx.currentTime);
+      this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : this.masterVolume, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
 
       this.musicGain = this.ctx.createGain();
-      this.musicGain.gain.setValueAtTime(this.isMusicEnabled ? 0.35 : 0.0001, this.ctx.currentTime);
+      this.musicGain.gain.setValueAtTime(this.isMusicEnabled ? this.musicVolume : 0.0001, this.ctx.currentTime);
       this.musicGain.connect(this.masterGain);
 
       this.sfxGain = this.ctx.createGain();
-      this.sfxGain.gain.setValueAtTime(this.isSoundEnabled ? 0.6 : 0.0001, this.ctx.currentTime);
+      this.sfxGain.gain.setValueAtTime(this.isSoundEnabled ? this.sfxVolume : 0.0001, this.ctx.currentTime);
       this.sfxGain.connect(this.masterGain);
+
+      // Dedicated priority channel for dragon warnings, player damage, bomb explosions
+      this.priorityGain = this.ctx.createGain();
+      this.priorityGain.gain.setValueAtTime(this.isSoundEnabled ? Math.min(1.0, this.sfxVolume * 1.35) : 0.0001, this.ctx.currentTime);
+      this.priorityGain.connect(this.masterGain);
+
+      // Initialize integrated MusicManager
+      this.musicManager.init(this.ctx, this.masterGain);
+      this.musicManager.setMasterVolume(this.masterVolume);
+      this.musicManager.setMusicVolume(this.musicVolume);
+      this.musicManager.setEnabled(this.isMusicEnabled);
+      this.musicManager.setMuted(this.isMuted);
 
       this.isInitialized = true;
 
@@ -59,18 +84,69 @@ export class AudioManager {
     }
   }
 
-  public setMuted(muted: boolean): void {
-    this.isMuted = muted;
+  public setMasterVolume(vol: number): void {
+    this.masterVolume = Math.max(0, Math.min(1.0, vol));
     if (this.masterGain && this.ctx) {
-      const targetGain = muted ? 0 : 0.7;
+      const targetGain = this.isMuted ? 0 : this.masterVolume;
       this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
       this.masterGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.05);
     }
+    this.musicManager.setMasterVolume(this.masterVolume);
+  }
+
+  public setMusicVolume(vol: number): void {
+    this.musicVolume = Math.max(0, Math.min(1.0, vol));
+    if (this.musicGain && this.ctx) {
+      const targetGain = this.isMusicEnabled ? this.musicVolume : 0.0001;
+      this.musicGain.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.musicGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.05);
+    }
+    this.musicManager.setMusicVolume(this.musicVolume);
+  }
+
+  public setSfxVolume(vol: number): void {
+    this.sfxVolume = Math.max(0, Math.min(1.0, vol));
+    if (this.sfxGain && this.ctx) {
+      const targetGain = this.isSoundEnabled ? this.sfxVolume : 0.0001;
+      this.sfxGain.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.sfxGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.05);
+    }
+    if (this.priorityGain && this.ctx) {
+      const prioGain = this.isSoundEnabled ? Math.min(1.0, this.sfxVolume * 1.35) : 0.0001;
+      this.priorityGain.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.priorityGain.gain.setTargetAtTime(prioGain, this.ctx.currentTime, 0.05);
+    }
+  }
+
+  public getMasterVolume(): number {
+    return this.masterVolume;
+  }
+
+  public getMusicVolume(): number {
+    return this.musicVolume;
+  }
+
+  public getSfxVolume(): number {
+    return this.sfxVolume;
+  }
+
+  public setMuted(muted: boolean): void {
+    this.isMuted = muted;
+    this.setMasterVolume(this.masterVolume);
+    this.musicManager.setMuted(muted);
   }
 
   public toggleMute(): boolean {
     this.setMuted(!this.isMuted);
     return this.isMuted;
+  }
+
+  public setShieldSoundEnabled(enabled: boolean): void {
+    this.shieldSoundEnabled = enabled;
+  }
+
+  public setEnemyCombatSoundEnabled(enabled: boolean): void {
+    this.enemyCombatSoundEnabled = enabled;
   }
 
   public getIsMuted(): boolean {
@@ -79,20 +155,13 @@ export class AudioManager {
 
   public setMusicEnabled(enabled: boolean): void {
     this.isMusicEnabled = enabled;
-    if (this.musicGain && this.ctx) {
-      const targetGain = enabled ? 0.35 : 0.0001;
-      this.musicGain.gain.cancelScheduledValues(this.ctx.currentTime);
-      this.musicGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.05);
-    }
+    this.setMusicVolume(this.musicVolume);
+    this.musicManager.setEnabled(enabled);
   }
 
   public setSoundEnabled(enabled: boolean): void {
     this.isSoundEnabled = enabled;
-    if (this.sfxGain && this.ctx) {
-      const targetGain = enabled ? 0.6 : 0.0001;
-      this.sfxGain.gain.cancelScheduledValues(this.ctx.currentTime);
-      this.sfxGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.05);
-    }
+    this.setSfxVolume(this.sfxVolume);
   }
 
   public getIsMusicEnabled(): boolean {
@@ -183,6 +252,350 @@ export class AudioManager {
 
       osc.start(now);
       osc.stop(now + 0.25);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Play Protective Shield activation futuristic energy pulse (Phase 14)
+   */
+  public playShieldActivateSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.shieldSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      // Rising energy sweep
+      const sweepOsc = this.ctx.createOscillator();
+      const sweepGain = this.ctx.createGain();
+      sweepOsc.type = 'sawtooth';
+      sweepOsc.frequency.setValueAtTime(220, now);
+      sweepOsc.frequency.exponentialRampToValueAtTime(1240, now + 0.35);
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(600, now);
+      filter.frequency.exponentialRampToValueAtTime(3200, now + 0.35);
+
+      sweepGain.gain.setValueAtTime(0.28, now);
+      sweepGain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+
+      sweepOsc.connect(filter);
+      filter.connect(sweepGain);
+      sweepGain.connect(this.sfxGain);
+
+      sweepOsc.start(now);
+      sweepOsc.stop(now + 0.42);
+
+      // Shimmering chord
+      [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+        if (!this.ctx || !this.sfxGain) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const start = now + idx * 0.04;
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.2, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.38);
+
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+
+        osc.start(start);
+        osc.stop(start + 0.38);
+      });
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Play Protective Shield impact deflection sound with throttling
+   */
+  public playShieldDeflectSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.shieldSoundEnabled || !this.ctx || !this.sfxGain) return;
+    const now = performance.now();
+    // Throttling: prevent deafening audio if multiple hits occur within 140ms
+    if (now - this.lastShieldImpactTime < 140) return;
+    this.lastShieldImpactTime = now;
+
+    try {
+      const audioNow = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1400, audioNow);
+      osc.frequency.exponentialRampToValueAtTime(380, audioNow + 0.16);
+
+      gain.gain.setValueAtTime(0.38, audioNow);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioNow + 0.18);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(audioNow);
+      osc.stop(audioNow + 0.18);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Play Protective Shield expiration sound (soft energy shutdown)
+   */
+  public playShieldExpireSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.shieldSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(740, now);
+      osc.frequency.exponentialRampToValueAtTime(110, now + 0.32);
+
+      gain.gain.setValueAtTime(0.24, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now);
+      osc.stop(now + 0.35);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  // ============================================================================
+  // HUMAN SHOOTER ENEMY SFX (Phase 14)
+  // ============================================================================
+
+  public playHumanEnemyAlertSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.enemyCombatSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(540, now);
+      osc.frequency.setValueAtTime(820, now + 0.08);
+
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now);
+      osc.stop(now + 0.22);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  public playHumanEnemyAimSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.enemyCombatSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(320, now);
+      osc.frequency.exponentialRampToValueAtTime(960, now + 0.28);
+
+      gain.gain.setValueAtTime(0.16, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now);
+      osc.stop(now + 0.3);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  public playHumanEnemyShootSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.enemyCombatSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      // Pitch variation ±12%
+      const pitch = 760 + (Math.random() - 0.5) * 180;
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(pitch, now);
+      osc.frequency.exponentialRampToValueAtTime(140, now + 0.14);
+
+      gain.gain.setValueAtTime(0.24, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now);
+      osc.stop(now + 0.15);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  public playHumanEnemyHurtSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.enemyCombatSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(360, now);
+      osc.frequency.exponentialRampToValueAtTime(120, now + 0.12);
+
+      gain.gain.setValueAtTime(0.22, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now);
+      osc.stop(now + 0.13);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  public playHumanEnemyDefeatSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.enemyCombatSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      [440, 330, 220].forEach((freq, idx) => {
+        if (!this.ctx || !this.sfxGain) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const start = now + idx * 0.06;
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.22, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.18);
+
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+
+        osc.start(start);
+        osc.stop(start + 0.18);
+      });
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  public playEliteEncounterSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.priorityGain || !this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(140, now);
+      osc.frequency.exponentialRampToValueAtTime(520, now + 0.45);
+
+      gain.gain.setValueAtTime(0.35, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+      osc.connect(gain);
+      gain.connect(this.priorityGain);
+
+      osc.start(now);
+      osc.stop(now + 0.5);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Play small red stone collision scrape/chip
+   */
+  public playStoneHitSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(280, now);
+      osc.frequency.exponentialRampToValueAtTime(90, now + 0.12);
+
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now);
+      osc.stop(now + 0.14);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Play Enemy projectile discharge whoosh
+   */
+  public playEnemyShootSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(420, now);
+      osc.frequency.exponentialRampToValueAtTime(140, now + 0.18);
+
+      gain.gain.setValueAtTime(0.22, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now);
+      osc.stop(now + 0.2);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Play brief non-intrusive projectile attack warning chime
+   */
+  public playWarningSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(920, now);
+      osc.frequency.setValueAtTime(1150, now + 0.06);
+
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now);
+      osc.stop(now + 0.12);
     } catch {
       // Audio fallback
     }
@@ -359,7 +772,7 @@ export class AudioManager {
   /**
    * Play blaster projectile firing sound with weapon variations
    */
-  public playShootSound(weaponType: 'NORMAL' | 'BIG_BULLET' | 'MACHINE_GUN' = 'NORMAL'): void {
+  public playShootSound(weaponType: WeaponType = 'NORMAL'): void {
     if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const now = this.ctx.currentTime;
@@ -386,6 +799,17 @@ export class AudioManager {
         gain.connect(this.sfxGain);
         osc.start(now);
         osc.stop(now + 0.06);
+      } else if (weaponType === 'SPECIAL_BOMB') {
+        // Celestial Star Emitter sound
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(1320, now);
+        osc.frequency.exponentialRampToValueAtTime(180, now + 0.22);
+        gain.gain.setValueAtTime(0.38, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.23);
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+        osc.start(now);
+        osc.stop(now + 0.23);
       } else {
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(880, now);
@@ -703,9 +1127,198 @@ export class AudioManager {
   }
 
   /**
-   * Phase 7: Voice Recognition Listening feedback chime (short pleasant beep)
+   * Play obstacle destruction sound (crisp cyber explosion with crumbling resonance)
    */
-  public playListeningSound(): void {
+  public playObstacleDestructionSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const filter = this.ctx.createBiquadFilter();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(260, now);
+      osc.frequency.exponentialRampToValueAtTime(45, now + 0.22);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(800, now);
+      filter.frequency.exponentialRampToValueAtTime(150, now + 0.22);
+
+      gain.gain.setValueAtTime(0.4, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now);
+      osc.stop(now + 0.25);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * High-Priority: Dragon attack warning alarm (dual-tone cyber klaxon)
+   */
+  public playDragonWarningSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      const targetGain = this.priorityGain || this.sfxGain;
+      if (!targetGain) return;
+
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.setValueAtTime(587.33, now + 0.1);
+      osc.frequency.setValueAtTime(880, now + 0.2);
+
+      gain.gain.setValueAtTime(0.45, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+
+      osc.connect(gain);
+      gain.connect(targetGain);
+
+      osc.start(now);
+      osc.stop(now + 0.32);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * High-Priority: Dragon launch/throw projectile roar
+   */
+  public playDragonAttackSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      const targetGain = this.priorityGain || this.sfxGain;
+      if (!targetGain) return;
+
+      const osc = this.ctx.createOscillator();
+      const filter = this.ctx.createBiquadFilter();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(160, now);
+      osc.frequency.linearRampToValueAtTime(420, now + 0.15);
+      osc.frequency.exponentialRampToValueAtTime(70, now + 0.45);
+
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(400, now);
+
+      gain.gain.setValueAtTime(0.5, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(targetGain);
+
+      osc.start(now);
+      osc.stop(now + 0.45);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Dragon hit damage impact
+   */
+  public playDragonHitSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(320, now);
+      osc.frequency.exponentialRampToValueAtTime(90, now + 0.12);
+
+      gain.gain.setValueAtTime(0.35, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now);
+      osc.stop(now + 0.14);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * High-Priority: Dragon defeated grand destruction boom
+   */
+  public playDragonDefeatSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      const targetGain = this.priorityGain || this.sfxGain;
+      if (!targetGain) return;
+
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(500, now);
+      osc.frequency.exponentialRampToValueAtTime(30, now + 0.8);
+
+      gain.gain.setValueAtTime(0.65, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+
+      osc.connect(gain);
+      gain.connect(targetGain);
+
+      osc.start(now);
+      osc.stop(now + 0.85);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Convenience aliases for standard sounds
+   */
+  public playBulletImpactSound(): void {
+    this.playHitSound();
+  }
+
+  public playDamageSound(): void {
+    this.playPlayerDamageSound();
+  }
+
+  public playBombPickupSound(): void {
+    this.playPickupSound('BOMB');
+  }
+
+  public playBigBulletPickupSound(): void {
+    this.playPickupSound('BIG_BULLET');
+  }
+
+  public playMachineGunPickupSound(): void {
+    this.playPickupSound('MACHINE_GUN');
+  }
+
+  public playHealthPickupSound(): void {
+    this.playPickupSound('HEALTH');
+  }
+
+  public playLevelCompleteSound(): void {
+    this.musicManager.playVictoryMusic();
+  }
+
+  public playButtonClickSound(): void {
+    this.playClickSound();
+  }
+
+  public playPowerUpExpiredSound(): void {
     if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const now = this.ctx.currentTime;
@@ -713,187 +1326,51 @@ export class AudioManager {
       const gain = this.ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, now); // D5
-      osc.frequency.exponentialRampToValueAtTime(880, now + 0.08); // A5
+      osc.frequency.setValueAtTime(520, now);
+      osc.frequency.exponentialRampToValueAtTime(260, now + 0.18);
 
-      gain.gain.setValueAtTime(0.18, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
 
       osc.connect(gain);
       gain.connect(this.sfxGain);
 
       osc.start(now);
-      osc.stop(now + 0.12);
+      osc.stop(now + 0.2);
     } catch {
       // Audio fallback
     }
   }
 
   /**
-   * Phase 7: Voice Correct pronunciation chime (cheerful ascending two-tone)
-   */
-  public playVoiceCorrectSound(): void {
-    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
-    try {
-      const now = this.ctx.currentTime;
-      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
-      notes.forEach((freq, idx) => {
-        if (!this.ctx || !this.sfxGain) return;
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        const startTime = now + idx * 0.06;
-
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, startTime);
-
-        gain.gain.setValueAtTime(0.22, startTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.16);
-
-        osc.connect(gain);
-        gain.connect(this.sfxGain);
-
-        osc.start(startTime);
-        osc.stop(startTime + 0.16);
-      });
-    } catch {
-      // Audio fallback
-    }
-  }
-
-  /**
-   * Phase 7: Voice Try-Again gentle cue (soft two-tone, non-harsh)
-   */
-  public playVoiceTryAgainSound(): void {
-    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
-    try {
-      const now = this.ctx.currentTime;
-      const notes = [440, 392]; // A4 -> G4 gentle descending
-      notes.forEach((freq, idx) => {
-        if (!this.ctx || !this.sfxGain) return;
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        const startTime = now + idx * 0.1;
-
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, startTime);
-
-        gain.gain.setValueAtTime(0.16, startTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.14);
-
-        osc.connect(gain);
-        gain.connect(this.sfxGain);
-
-        osc.start(startTime);
-        osc.stop(startTime + 0.14);
-      });
-    } catch {
-      // Audio fallback
-    }
-  }
-
-  /**
-   * Energetic cyber runner procedural soundtrack engine
-   * Rhythmic bassline and synth arpeggios synced to gameplay
+   * Energetic cyber runner procedural soundtrack engine via MusicManager
    */
   public startAmbientMusic(): void {
     if (!this.init()) return;
-    if (this.isMusicPlaying) return;
-
-    this.isMusicPlaying = true;
-    this.beatStep = 0;
-
-    // 125 BPM = 120ms per 16th note step
-    const stepDurationMs = 120;
-
-    const bassNotes = [110, 110, 130.81, 110, 98, 98, 123.47, 98]; // A2, C3, G2, B2
-    const leadNotes = [440, 523.25, 659.25, 783.99, 659.25, 523.25, 440, 392];
-
-    this.musicIntervalId = window.setInterval(() => {
-      if (!this.ctx || !this.musicGain || !this.isMusicEnabled || this.isMuted) return;
-
-      try {
-        const now = this.ctx.currentTime;
-        const step = this.beatStep % 16;
-        this.beatStep++;
-
-        // 1. Kick/Sub pulse on beats 0, 4, 8, 12
-        if (step % 4 === 0) {
-          const kickOsc = this.ctx.createOscillator();
-          const kickGain = this.ctx.createGain();
-          kickOsc.type = 'sine';
-          kickOsc.frequency.setValueAtTime(140, now);
-          kickOsc.frequency.exponentialRampToValueAtTime(38, now + 0.08);
-
-          kickGain.gain.setValueAtTime(0.25, now);
-          kickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-
-          kickOsc.connect(kickGain);
-          kickGain.connect(this.musicGain);
-
-          kickOsc.start(now);
-          kickOsc.stop(now + 0.1);
-        }
-
-        // 2. Synth Bass Arp on every 2nd step
-        if (step % 2 === 0) {
-          const noteIdx = Math.floor(step / 2) % bassNotes.length;
-          const bassFreq = bassNotes[noteIdx];
-
-          const bassOsc = this.ctx.createOscillator();
-          const bassFilter = this.ctx.createBiquadFilter();
-          const bGain = this.ctx.createGain();
-
-          bassOsc.type = 'sawtooth';
-          bassOsc.frequency.setValueAtTime(bassFreq, now);
-
-          bassFilter.type = 'lowpass';
-          bassFilter.frequency.setValueAtTime(320, now);
-
-          bGain.gain.setValueAtTime(0.12, now);
-          bGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
-
-          bassOsc.connect(bassFilter);
-          bassFilter.connect(bGain);
-          bGain.connect(this.musicGain);
-
-          bassOsc.start(now);
-          bassOsc.stop(now + 0.14);
-        }
-
-        // 3. Shimmering lead note on select steps
-        if (step === 2 || step === 7 || step === 10 || step === 14) {
-          const leadFreq = leadNotes[(step + Math.floor(this.beatStep / 16)) % leadNotes.length];
-          const leadOsc = this.ctx.createOscillator();
-          const lGain = this.ctx.createGain();
-
-          leadOsc.type = 'triangle';
-          leadOsc.frequency.setValueAtTime(leadFreq, now);
-
-          lGain.gain.setValueAtTime(0.08, now);
-          lGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-
-          leadOsc.connect(lGain);
-          lGain.connect(this.musicGain);
-
-          leadOsc.start(now);
-          leadOsc.stop(now + 0.18);
-        }
-      } catch {
-        // Safe synth fallback
-      }
-    }, stepDurationMs);
+    this.musicManager.playGameplayMusic();
   }
 
   public stopAmbientMusic(): void {
-    this.isMusicPlaying = false;
-    if (this.musicIntervalId !== null) {
-      clearInterval(this.musicIntervalId);
-      this.musicIntervalId = null;
-    }
+    this.musicManager.stop();
+  }
+
+  public playMenuMusic(): void {
+    if (!this.init()) return;
+    this.musicManager.playMenuMusic();
+  }
+
+  public playDragonMusic(): void {
+    if (!this.init()) return;
+    this.musicManager.transitionToDragonMusic();
+  }
+
+  public playVictoryMusic(): void {
+    if (!this.init()) return;
+    this.musicManager.playVictoryMusic();
   }
 
   public dispose(): void {
-    this.stopAmbientMusic();
+    this.musicManager.dispose();
     if (this.ctx && this.ctx.state !== 'closed') {
       this.ctx.close().catch(() => {});
     }

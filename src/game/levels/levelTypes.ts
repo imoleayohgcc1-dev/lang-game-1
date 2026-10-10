@@ -57,6 +57,8 @@ export interface LevelDefinition {
   secondaryObjectives: LevelSecondaryObjective[];
   rewardConfiguration: LevelRewardConfig;
   checkpoints: number[]; // percentage milestones e.g. [25, 50, 75]
+  hasDragonEncounter?: boolean;
+  dragonEncounterDistance?: number;
 }
 
 export interface LevelProgressState {

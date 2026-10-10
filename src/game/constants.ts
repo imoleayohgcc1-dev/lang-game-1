@@ -2,7 +2,7 @@ export type GameState = 'LOADING' | 'READY' | 'PLAYING' | 'PAUSED' | 'GAME_OVER'
 
 export type PlayerState = 'RUNNING' | 'LANE_CHANGING' | 'JUMPING' | 'FALLING' | 'SLIDING' | 'DEAD';
 
-export type ObstacleType = 'LOW' | 'HIGH' | 'BLOCKING' | 'MOVING_BARRIER';
+export type ObstacleType = 'LOW' | 'HIGH' | 'BLOCKING' | 'MOVING_BARRIER' | 'RED_STONE';
 
 export type EnemyType = 'BASIC' | 'FAST' | 'ARMORED';
 
@@ -17,31 +17,35 @@ export type GraphicsQuality = 'LOW' | 'MEDIUM' | 'HIGH';
 export interface GameSettings {
   musicEnabled: boolean;
   soundEnabled: boolean;
+  masterVolume: number; // 0.0 - 1.0
+  musicVolume: number; // 0.0 - 1.0
+  sfxVolume: number; // 0.0 - 1.0
+  shieldSoundEnabled: boolean;
+  enemyCombatSoundEnabled: boolean;
   graphicsQuality: GraphicsQuality;
   theme: EnvironmentTheme;
   dayNight: DayNightMode;
   controlSensitivity: number; // 1.0 = normal, 1.3 = fast
-  voiceRecognitionEnabled: boolean;
-  autoListen: boolean;
-  pronunciationAudioEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
   musicEnabled: true,
   soundEnabled: true,
+  masterVolume: 0.8,
+  musicVolume: 0.45,
+  sfxVolume: 0.7,
+  shieldSoundEnabled: true,
+  enemyCombatSoundEnabled: true,
   graphicsQuality: 'MEDIUM',
   theme: 'CYBERPUNK',
   dayNight: 'NIGHT',
   controlSensitivity: 1.0,
-  voiceRecognitionEnabled: true,
-  autoListen: false,
-  pronunciationAudioEnabled: true,
 };
 
 export const GAME_CONFIG = {
   TITLE: 'CYBER RUNNER 3D',
   SUBTITLE: 'Run · Shoot · Blast · Survive',
-  VERSION: '1.0.0-phase11',
+  VERSION: '1.0.0-phase12',
 
   // Gameplay & Physics
   BASE_SPEED: 18.0, // units per second

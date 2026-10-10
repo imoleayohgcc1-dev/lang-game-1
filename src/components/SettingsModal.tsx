@@ -14,6 +14,7 @@ import {
   Award,
   Crosshair,
   Bomb,
+  Zap,
 } from 'lucide-react';
 import {
   GameSettings,
@@ -49,6 +50,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleToggleSound = () => {
     onUpdateSettings({ ...settings, soundEnabled: !settings.soundEnabled });
+  };
+
+  const handleMasterVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value);
+    onUpdateSettings({ ...settings, masterVolume: val });
+  };
+
+  const handleMusicVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value);
+    onUpdateSettings({ ...settings, musicVolume: val });
+  };
+
+  const handleSfxVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value);
+    onUpdateSettings({ ...settings, sfxVolume: val });
   };
 
   const handleSetGraphics = (quality: GraphicsQuality) => {
@@ -113,39 +129,120 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="overflow-y-auto pr-1 space-y-4 flex-1">
           {activeTab === 'SETTINGS' && (
             <>
-              {/* Audio Controls */}
-              <div className="grid grid-cols-2 gap-2.5">
-                <button
-                  onClick={handleToggleMusic}
-                  className="flex items-center justify-between p-3 bg-slate-950/50 rounded-2xl border border-slate-800 hover:border-slate-700 cursor-pointer text-left"
-                >
+              {/* Audio Controls & Volume Mixing */}
+              <div className="p-3.5 bg-slate-950/50 rounded-2xl border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between text-xs font-semibold text-white">
                   <div className="flex items-center gap-2">
-                    <Music className="w-4 h-4 text-cyan-400" />
-                    <div>
-                      <div className="text-xs font-semibold text-white">Music</div>
-                      <div className="text-[10px] text-slate-400">Synthesizer OST</div>
-                    </div>
+                    <Volume2 className="w-4 h-4 text-cyan-400" />
+                    <span>Sound Mixing & Volumes</span>
                   </div>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${settings.musicEnabled ? 'bg-cyan-500/20 text-cyan-300' : 'bg-slate-800 text-slate-400'}`}>
-                    {settings.musicEnabled ? 'ON' : 'OFF'}
-                  </span>
-                </button>
+                </div>
 
-                <button
-                  onClick={handleToggleSound}
-                  className="flex items-center justify-between p-3 bg-slate-950/50 rounded-2xl border border-slate-800 hover:border-slate-700 cursor-pointer text-left"
-                >
-                  <div className="flex items-center gap-2">
-                    {settings.soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-rose-400" />}
-                    <div>
-                      <div className="text-xs font-semibold text-white">Sound FX</div>
-                      <div className="text-[10px] text-slate-400">Lasers, bombs, impacts</div>
-                    </div>
+                {/* Master Volume Slider */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] font-semibold text-slate-300">
+                    <span>Master Volume</span>
+                    <span className="font-mono text-cyan-400">{Math.round((settings.masterVolume ?? 0.8) * 100)}%</span>
                   </div>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${settings.soundEnabled ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>
-                    {settings.soundEnabled ? 'ON' : 'OFF'}
-                  </span>
-                </button>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={settings.masterVolume ?? 0.8}
+                    onChange={handleMasterVolumeChange}
+                    className="w-full accent-cyan-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                  />
+                </div>
+
+                {/* Music Volume Slider */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] font-semibold text-slate-300">
+                    <span>Music Volume (Soundtrack)</span>
+                    <span className="font-mono text-purple-400">{Math.round((settings.musicVolume ?? 0.45) * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={settings.musicVolume ?? 0.45}
+                    onChange={handleMusicVolumeChange}
+                    className="w-full accent-purple-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                  />
+                </div>
+
+                {/* SFX Volume Slider */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] font-semibold text-slate-300">
+                    <span>SFX Volume (Weapons, Dragons, Impacts)</span>
+                    <span className="font-mono text-emerald-400">{Math.round((settings.sfxVolume ?? 0.7) * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={settings.sfxVolume ?? 0.7}
+                    onChange={handleSfxVolumeChange}
+                    className="w-full accent-emerald-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                  />
+                </div>
+
+                {/* Toggle Buttons */}
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/80">
+                  <button
+                    onClick={handleToggleMusic}
+                    className="flex items-center justify-between p-2.5 bg-slate-900 rounded-xl border border-slate-800 hover:border-slate-700 cursor-pointer text-left"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Music className="w-3.5 h-3.5 text-cyan-400" />
+                      <span className="text-xs font-semibold text-white">Music</span>
+                    </div>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${settings.musicEnabled ? 'bg-cyan-500/20 text-cyan-300' : 'bg-slate-800 text-slate-400'}`}>
+                      {settings.musicEnabled ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={handleToggleSound}
+                    className="flex items-center justify-between p-2.5 bg-slate-900 rounded-xl border border-slate-800 hover:border-slate-700 cursor-pointer text-left"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      {settings.soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-400" /> : <VolumeX className="w-3.5 h-3.5 text-rose-400" />}
+                      <span className="text-xs font-semibold text-white">Sound FX</span>
+                    </div>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${settings.soundEnabled ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>
+                      {settings.soundEnabled ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => onUpdateSettings({ ...settings, shieldSoundEnabled: !settings.shieldSoundEnabled })}
+                    className="flex items-center justify-between p-2.5 bg-slate-900 rounded-xl border border-slate-800 hover:border-slate-700 cursor-pointer text-left"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-cyan-300" />
+                      <span className="text-xs font-semibold text-white">Shield SFX</span>
+                    </div>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${settings.shieldSoundEnabled !== false ? 'bg-cyan-500/20 text-cyan-300' : 'bg-slate-800 text-slate-400'}`}>
+                      {settings.shieldSoundEnabled !== false ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => onUpdateSettings({ ...settings, enemyCombatSoundEnabled: !settings.enemyCombatSoundEnabled })}
+                    className="flex items-center justify-between p-2.5 bg-slate-900 rounded-xl border border-slate-800 hover:border-slate-700 cursor-pointer text-left"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Crosshair className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="text-xs font-semibold text-white">Enemy SFX</span>
+                    </div>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${settings.enemyCombatSoundEnabled !== false ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-800 text-slate-400'}`}>
+                      {settings.enemyCombatSoundEnabled !== false ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+                </div>
               </div>
 
               {/* Graphics Quality */}

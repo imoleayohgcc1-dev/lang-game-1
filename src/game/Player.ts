@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GAME_CONFIG, PlayerState } from './constants';
+import { WeaponType } from './combatTypes';
 
 export class Player {
   public mesh: THREE.Group;
@@ -16,8 +17,13 @@ export class Player {
   private reactorMesh!: THREE.Mesh;
   private blasterMesh!: THREE.Group;
   private muzzleTip!: THREE.Object3D;
-  private shieldMesh!: THREE.Mesh;
-  private shieldMat!: THREE.MeshBasicMaterial;
+  private leftBlasterMesh!: THREE.Group;
+  private leftMuzzleTip!: THREE.Object3D;
+  private rightBarrelMesh!: THREE.Mesh;
+  private leftBarrelMesh!: THREE.Mesh;
+  private weaponGlowMat!: THREE.MeshStandardMaterial;
+  private lastMuzzleSide: 'RIGHT' | 'LEFT' = 'LEFT';
+  public currentWeaponType: WeaponType = 'NORMAL';
   private magnetMesh!: THREE.Mesh;
   private magnetMat!: THREE.MeshBasicMaterial;
 
@@ -48,6 +54,19 @@ export class Player {
 
   // Run cycle animation time
   private runAnimTime: number = 0;
+
+  // Shield Protective Energy Globe (Phase 14)
+  public shieldGroup: THREE.Group | null = null;
+  public shieldInner: THREE.Mesh | null = null;
+  public shieldInnerMat: THREE.MeshBasicMaterial | null = null;
+  public shieldMesh: THREE.Mesh | null = null;
+  public shieldMat: THREE.MeshBasicMaterial | null = null;
+  public shieldRing1: THREE.Mesh | null = null;
+  public shieldRing2: THREE.Mesh | null = null;
+  public shieldParticles: THREE.Points | null = null;
+  private shieldScale: number = 0;
+  private isShieldActiveState: boolean = false;
+  private shieldHitFlashTimer: number = 0;
 
   // Reusable bounding box for collision detection (zero runtime allocation)
   private boundingBox: THREE.Box3 = new THREE.Box3();
@@ -158,7 +177,16 @@ export class Player {
     rightArm.castShadow = true;
     this.rightArmPivot.add(rightArm);
 
-    // --- BLASTER WEAPON (Mounted on Right Hand) ---
+    // --- WEAPON MATERIAL ---
+    this.weaponGlowMat = new THREE.MeshStandardMaterial({
+      color: 0x22d3ee,
+      emissive: 0x22d3ee,
+      emissiveIntensity: 1.0,
+      roughness: 0.1,
+      metalness: 0.8,
+    });
+
+    // --- RIGHT BLASTER WEAPON ---
     this.blasterMesh = new THREE.Group();
     this.blasterMesh.position.set(0.02, -0.65, 0.18);
 
@@ -168,16 +196,31 @@ export class Player {
 
     const barrelGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.32, 8);
     barrelGeo.rotateX(Math.PI / 2);
-    const barrel = new THREE.Mesh(barrelGeo, this.reactorMat);
-    barrel.position.set(0, 0.04, -0.25);
-    this.blasterMesh.add(barrel);
+    this.rightBarrelMesh = new THREE.Mesh(barrelGeo, this.weaponGlowMat);
+    this.rightBarrelMesh.position.set(0, 0.04, -0.25);
+    this.blasterMesh.add(this.rightBarrelMesh);
 
     // Muzzle tip locator
     this.muzzleTip = new THREE.Object3D();
     this.muzzleTip.position.set(0, 0.04, -0.45);
     this.blasterMesh.add(this.muzzleTip);
-
     this.rightArmPivot.add(this.blasterMesh);
+
+    // --- LEFT BLASTER WEAPON (Left-Side Shooting & Twin Fire) ---
+    this.leftBlasterMesh = new THREE.Group();
+    this.leftBlasterMesh.position.set(-0.02, -0.65, 0.18);
+
+    const leftBlasterBody = new THREE.Mesh(blasterBodyGeo, armorMat);
+    this.leftBlasterMesh.add(leftBlasterBody);
+
+    this.leftBarrelMesh = new THREE.Mesh(barrelGeo, this.weaponGlowMat);
+    this.leftBarrelMesh.position.set(0, 0.04, -0.25);
+    this.leftBlasterMesh.add(this.leftBarrelMesh);
+
+    this.leftMuzzleTip = new THREE.Object3D();
+    this.leftMuzzleTip.position.set(0, 0.04, -0.45);
+    this.leftBlasterMesh.add(this.leftMuzzleTip);
+    this.leftArmPivot.add(this.leftBlasterMesh);
 
     // --- HIPS & LEGS ---
     // Left Leg Pivot
@@ -219,18 +262,82 @@ export class Player {
     this.mesh.add(this.contactShadow);
 
     // --- POWER-UP VISUAL AURAS ---
-    // Shield Energy Bubble
-    const shieldGeo = new THREE.SphereGeometry(1.4, 16, 12);
-    this.shieldMat = new THREE.MeshBasicMaterial({
-      color: GAME_CONFIG.POWERUPS.TYPES.SHIELD.COLOR,
+    // Shield Protective Globe (Phase 14: Polished transparent glass-like spherical energy field)
+    this.shieldGroup = new THREE.Group();
+    this.shieldGroup.position.y = 1.3;
+
+    // 1. Translucent glass-like inner sphere with soft blue & cyan highlights
+    const shieldInnerGeo = new THREE.SphereGeometry(1.36, 24, 20);
+    this.shieldInnerMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8, // Sky blue / cyan
       transparent: true,
-      opacity: 0.35,
+      opacity: 0.22,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.shieldInner = new THREE.Mesh(shieldInnerGeo, this.shieldInnerMat);
+    this.shieldGroup.add(this.shieldInner);
+
+    // 2. Geodesic energy lattice with animated wireframe
+    const shieldGeo = new THREE.SphereGeometry(1.44, 18, 14);
+    this.shieldMat = new THREE.MeshBasicMaterial({
+      color: 0x22d3ee, // Bright neon cyan
+      transparent: true,
+      opacity: 0.5,
       wireframe: true,
+      depthWrite: false,
     });
     this.shieldMesh = new THREE.Mesh(shieldGeo, this.shieldMat);
-    this.shieldMesh.position.y = 1.3;
-    this.shieldMesh.visible = false;
-    this.mesh.add(this.shieldMesh);
+    this.shieldGroup.add(this.shieldMesh);
+
+    // 3. Electrical orbital energy rings
+    const ringGeo1 = new THREE.TorusGeometry(1.46, 0.025, 8, 32);
+    const ringMat1 = new THREE.MeshBasicMaterial({
+      color: 0x67e8f9,
+      transparent: true,
+      opacity: 0.65,
+    });
+    this.shieldRing1 = new THREE.Mesh(ringGeo1, ringMat1);
+    this.shieldRing1.rotation.x = Math.PI / 4;
+    this.shieldGroup.add(this.shieldRing1);
+
+    const ringGeo2 = new THREE.TorusGeometry(1.48, 0.025, 8, 32);
+    const ringMat2 = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.55,
+    });
+    this.shieldRing2 = new THREE.Mesh(ringGeo2, ringMat2);
+    this.shieldRing2.rotation.y = Math.PI / 3;
+    this.shieldGroup.add(this.shieldRing2);
+
+    // 4. Moving energy particles / electrical arcs around the globe
+    const particleCount = 28;
+    const particlePositions = new Float32Array(particleCount * 3);
+    for (let p = 0; p < particleCount; p++) {
+      const u = Math.random();
+      const v = Math.random();
+      const theta = u * 2.0 * Math.PI;
+      const phi = Math.acos(2.0 * v - 1.0);
+      const r = 1.45 + (Math.random() - 0.5) * 0.12;
+      particlePositions[p * 3] = r * Math.sin(phi) * Math.cos(theta);
+      particlePositions[p * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      particlePositions[p * 3 + 2] = r * Math.cos(phi);
+    }
+    const particleGeo = new THREE.BufferGeometry();
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    const particleMat = new THREE.PointsMaterial({
+      color: 0xa5f3fc,
+      size: 0.12,
+      transparent: true,
+      opacity: 0.85,
+    });
+    this.shieldParticles = new THREE.Points(particleGeo, particleMat);
+    this.shieldGroup.add(this.shieldParticles);
+
+    this.shieldGroup.visible = false;
+    this.shieldGroup.scale.set(0.001, 0.001, 0.001);
+    this.mesh.add(this.shieldGroup);
 
     // Magnet Suction Ring
     const magnetGeo = new THREE.TorusGeometry(1.3, 0.06, 8, 24);
@@ -249,8 +356,38 @@ export class Player {
     this.mesh.position.set(0, 0, 0);
   }
 
-  public setShieldActive(active: boolean): void {
-    if (this.shieldMesh) this.shieldMesh.visible = active;
+  public setShieldActive(active: boolean, isExpiringSoon: boolean = false): void {
+    this.isShieldActiveState = active;
+    if (!this.shieldGroup) return;
+
+    if (active) {
+      this.shieldGroup.visible = true;
+      if (isExpiringSoon) {
+        // Subtle amber/gold pulse when expiring soon (<= 3s)
+        this.shieldMat?.color.setHex(0xf59e0b);
+        this.shieldInnerMat?.color.setHex(0xf59e0b);
+      } else {
+        // Pristine cyan / soft blue transparent energy globe
+        this.shieldMat?.color.setHex(0x22d3ee);
+        this.shieldInnerMat?.color.setHex(0x38bdf8);
+      }
+    } else {
+      // Deactivating will be animated down to 0 in update
+    }
+  }
+
+  public triggerShieldHitEffect(): void {
+    if (!this.shieldGroup || !this.shieldGroup.visible) return;
+
+    this.shieldHitFlashTimer = 0.15;
+    if (this.shieldMat) {
+      this.shieldMat.color.setHex(0xffffff);
+      this.shieldMat.opacity = 0.9;
+    }
+    if (this.shieldInnerMat) {
+      this.shieldInnerMat.color.setHex(0x67e8f9);
+      this.shieldInnerMat.opacity = 0.45;
+    }
   }
 
   public setMagnetActive(active: boolean): void {
@@ -311,13 +448,89 @@ export class Player {
   }
 
   /**
-   * Get world position where laser projectile spawns from blaster barrel
+   * Get world position where laser projectile spawns from blaster barrel.
+   * Supports left-side shooting, right-side shooting, or automatic alternating twin-fire!
    */
-  public getMuzzleWorldPosition(outVec: THREE.Vector3): THREE.Vector3 {
+  public getMuzzleWorldPosition(
+    outVec: THREE.Vector3,
+    preferSide?: 'LEFT' | 'RIGHT' | 'AUTO'
+  ): THREE.Vector3 {
+    let side: 'RIGHT' | 'LEFT';
+
+    if (preferSide === 'LEFT') {
+      side = 'LEFT';
+    } else if (preferSide === 'RIGHT') {
+      side = 'RIGHT';
+    } else {
+      // AUTO alternating twin barrels
+      side = this.lastMuzzleSide === 'RIGHT' ? 'LEFT' : 'RIGHT';
+    }
+
+    this.lastMuzzleSide = side;
+
+    if (side === 'LEFT' && this.leftMuzzleTip) {
+      return this.leftMuzzleTip.getWorldPosition(outVec);
+    }
+
     if (this.muzzleTip) {
       return this.muzzleTip.getWorldPosition(outVec);
     }
-    return outVec.copy(this.mesh.position).add(new THREE.Vector3(0.55, 1.2, -0.6));
+
+    const xOffset = side === 'LEFT' ? -0.55 : 0.55;
+    return outVec.copy(this.mesh.position).add(new THREE.Vector3(xOffset, 1.2, -0.6));
+  }
+
+  /**
+   * Visually transforms the player's 3D weapon system based on active weapon:
+   * - NORMAL: Sleek cyan blaster
+   * - BIG_BULLET: Heavy Plasma Cannon with dual heavy-bore barrels & molten amber glow
+   * - MACHINE_GUN: Pulse Gatling rotary with rapid crimson emission
+   * - SPECIAL_BOMB: Star Power celestial emitter with star magenta radiance
+   */
+  public transformWeapon(type: WeaponType): void {
+    this.currentWeaponType = type;
+
+    if (!this.weaponGlowMat || !this.blasterMesh || !this.leftBlasterMesh) return;
+
+    switch (type) {
+      case 'BIG_BULLET': {
+        // Heavy Plasma Cannon (Heavy Amber/Gold, enlarged barrels)
+        this.weaponGlowMat.color.setHex(0xf59e0b);
+        this.weaponGlowMat.emissive.setHex(0xf59e0b);
+        this.weaponGlowMat.emissiveIntensity = 1.3;
+        this.blasterMesh.scale.set(1.4, 1.4, 1.3);
+        this.leftBlasterMesh.scale.set(1.4, 1.4, 1.3);
+        break;
+      }
+      case 'MACHINE_GUN': {
+        // Pulse Gatling (High-tech crimson rotary, rapid twin profile)
+        this.weaponGlowMat.color.setHex(0xf43f5e);
+        this.weaponGlowMat.emissive.setHex(0xf43f5e);
+        this.weaponGlowMat.emissiveIntensity = 1.2;
+        this.blasterMesh.scale.set(1.15, 1.15, 1.2);
+        this.leftBlasterMesh.scale.set(1.15, 1.15, 1.2);
+        break;
+      }
+      case 'SPECIAL_BOMB': {
+        // Celestial Star Blaster (Radiant star power magenta)
+        this.weaponGlowMat.color.setHex(0xd946ef);
+        this.weaponGlowMat.emissive.setHex(0xd946ef);
+        this.weaponGlowMat.emissiveIntensity = 1.5;
+        this.blasterMesh.scale.set(1.3, 1.3, 1.3);
+        this.leftBlasterMesh.scale.set(1.3, 1.3, 1.3);
+        break;
+      }
+      case 'NORMAL':
+      default: {
+        // Standard Cyber Blaster (Cyan, default scale)
+        this.weaponGlowMat.color.setHex(0x22d3ee);
+        this.weaponGlowMat.emissive.setHex(0x22d3ee);
+        this.weaponGlowMat.emissiveIntensity = 1.0;
+        this.blasterMesh.scale.set(1.0, 1.0, 1.0);
+        this.leftBlasterMesh.scale.set(1.0, 1.0, 1.0);
+        break;
+      }
+    }
   }
 
   /**
@@ -332,6 +545,12 @@ export class Player {
     // Flash visor and reactor red briefly
     this.visorMat.emissive.setHex(GAME_CONFIG.COLORS.NEON_RED);
     this.reactorMat.emissive.setHex(GAME_CONFIG.COLORS.NEON_RED);
+  }
+
+  public setInvulnerable(duration: number): void {
+    this.isInvulnerable = true;
+    this.invulnerabilityTimer = duration;
+    this.blinkTime = 0;
   }
 
   /**
@@ -369,6 +588,55 @@ export class Player {
       }
     } else if (this.mesh.visible === false && this.state !== 'DEAD') {
       this.mesh.visible = true;
+    }
+
+    // Shield Globe Animation (Phase 14)
+    if (this.shieldGroup) {
+      if (this.isShieldActiveState) {
+        // Smooth scale-up activation
+        this.shieldScale = Math.min(1.0, this.shieldScale + delta * 5.0);
+        this.shieldGroup.scale.set(this.shieldScale, this.shieldScale, this.shieldScale);
+        this.shieldGroup.visible = true;
+
+        // Animate electrical rings & energy particles
+        if (this.shieldRing1) {
+          this.shieldRing1.rotation.x += delta * 1.8;
+          this.shieldRing1.rotation.y += delta * 1.4;
+        }
+        if (this.shieldRing2) {
+          this.shieldRing2.rotation.y -= delta * 1.6;
+          this.shieldRing2.rotation.z += delta * 1.2;
+        }
+        if (this.shieldMesh) {
+          this.shieldMesh.rotation.y += delta * 0.6;
+        }
+        if (this.shieldParticles) {
+          this.shieldParticles.rotation.y += delta * 0.9;
+          this.shieldParticles.rotation.x += delta * 0.4;
+        }
+
+        // Recover from hit flash
+        if (this.shieldHitFlashTimer > 0) {
+          this.shieldHitFlashTimer -= delta;
+          if (this.shieldHitFlashTimer <= 0) {
+            if (this.shieldMat) {
+              this.shieldMat.color.setHex(0x22d3ee);
+              this.shieldMat.opacity = 0.5;
+            }
+            if (this.shieldInnerMat) {
+              this.shieldInnerMat.color.setHex(0x38bdf8);
+              this.shieldInnerMat.opacity = 0.22;
+            }
+          }
+        }
+      } else if (this.shieldScale > 0) {
+        // Smooth fade-out and collapse
+        this.shieldScale = Math.max(0, this.shieldScale - delta * 4.0);
+        this.shieldGroup.scale.set(this.shieldScale, this.shieldScale, this.shieldScale);
+        if (this.shieldScale <= 0) {
+          this.shieldGroup.visible = false;
+        }
+      }
     }
 
     // 1. Horizontal lane transition lerping

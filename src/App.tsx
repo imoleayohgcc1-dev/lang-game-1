@@ -14,8 +14,11 @@ import { SettingsModal } from './components/SettingsModal';
 import { GameOverModal } from './components/GameOverModal';
 import { LevelCompleteModal } from './components/LevelCompleteModal';
 import { LevelSelectModal } from './components/LevelSelectModal';
+import { AdModal } from './components/AdModal';
 import { WebGLFallback } from './components/WebGLFallback';
 import { LevelCompletionStats } from './game/levels/levelTypes';
+import { AdManager } from './game/AdManager';
+import { AdPlacement } from './game/adConfig';
 import { Award } from 'lucide-react';
 
 export default function App() {
@@ -26,6 +29,11 @@ export default function App() {
   const [settings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [unlockedToast, setUnlockedToast] = useState<Achievement | null>(null);
+  const [activeAd, setActiveAd] = useState<{
+    placement: AdPlacement;
+    attemptId: string;
+    durationSeconds: number;
+  } | null>(null);
 
   const [metrics, setMetrics] = useState<GameMetrics>({
     score: 0,
@@ -180,8 +188,8 @@ export default function App() {
     gameManagerRef.current?.slide();
   };
 
-  const handleShoot = () => {
-    gameManagerRef.current?.shoot();
+  const handleShoot = (side?: 'LEFT' | 'RIGHT' | 'AUTO') => {
+    gameManagerRef.current?.shoot(side);
   };
 
   const handleBomb = () => {
@@ -210,6 +218,31 @@ export default function App() {
   const handleContinueRunningLevel = () => {
     setCompletedLevelStats(null);
   };
+
+  useEffect(() => {
+    const unsub = AdManager.getInstance().subscribeState((active) => {
+      setActiveAd(active);
+    });
+    return unsub;
+  }, []);
+
+  const handleRewardedRetry = useCallback(async () => {
+    if (!gameManagerRef.current?.canUseRewardedRetry()) return;
+    const result = await AdManager.getInstance().showRewardedAd('REWARDED_RETRY');
+    if (result.success && result.earnedReward) {
+      gameManagerRef.current?.revivePlayerWithReward();
+    }
+  }, []);
+
+  const handleRequestAdStartLevel = useCallback(async (levelNumber: number) => {
+    setIsLevelSelectOpen(false);
+    const result = await AdManager.getInstance().showRewardedAd('LEVEL_START_REWARD');
+    if (result.success && result.earnedReward) {
+      handleSelectLevel(levelNumber);
+      gameManagerRef.current?.playerHealthManager.activateShield(7.0);
+      gameManagerRef.current?.showMessage('🛡️ REWARDED DEPLOY: ENERGY GLOBE ACTIVE (7s)', 2500, 'powerup');
+    }
+  }, []);
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-slate-950 select-none">
@@ -297,6 +330,8 @@ export default function App() {
           onRetry={handleRestart}
           onHome={handleHome}
           onOpenLevelSelect={() => setIsLevelSelectOpen(true)}
+          onRewardedRetry={handleRewardedRetry}
+          canRewardedRetry={metrics.canRewardedRetry ?? true}
         />
       )}
 
@@ -339,7 +374,22 @@ export default function App() {
         }
         currentLevelNumber={metrics.levelProgress?.levelNumber || 1}
         onSelectLevel={handleSelectLevel}
+        onRequestAdStartLevel={handleRequestAdStartLevel}
       />
+
+      {/* Rewarded Ad Transmission Modal (Phase 14) */}
+      {activeAd && (
+        <AdModal
+          placement={activeAd.placement}
+          durationSeconds={activeAd.durationSeconds}
+          onComplete={() => {
+            AdManager.getInstance().confirmAdCompletion(activeAd.attemptId);
+          }}
+          onCancel={() => {
+            AdManager.getInstance().cancelOrCloseAd(activeAd.attemptId);
+          }}
+        />
+      )}
     </main>
   );
 }

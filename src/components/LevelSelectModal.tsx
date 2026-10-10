@@ -11,6 +11,7 @@ import {
   Sun,
   Moon,
   Sparkles,
+  Tv,
 } from 'lucide-react';
 import { LevelDefinition, LevelProgressState } from '../game/levels/levelTypes';
 
@@ -21,6 +22,7 @@ interface LevelSelectModalProps {
   progress: LevelProgressState;
   currentLevelNumber: number;
   onSelectLevel: (levelNumber: number) => void;
+  onRequestAdStartLevel?: (levelNumber: number) => void;
 }
 
 export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
@@ -30,6 +32,7 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
   progress,
   currentLevelNumber,
   onSelectLevel,
+  onRequestAdStartLevel,
 }) => {
   if (!isOpen) return null;
 
@@ -165,23 +168,38 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
                     </span>
                   </div>
 
-                  {/* Action Button */}
+                  {/* Action Buttons: Standard Start & Rewarded Ad Start */}
                   <div>
                     {isUnlocked ? (
-                      <button
-                        onClick={() => {
-                          onSelectLevel(lvl.levelNumber);
-                          onClose();
-                        }}
-                        className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                          isCurrent
-                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md'
-                            : 'bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white'
-                        }`}
-                      >
-                        <Play className="w-3 h-3 fill-current" />
-                        <span>{isCurrent ? 'SELECTED' : 'RUN'}</span>
-                      </button>
+                      <div className="flex items-center gap-2 flex-wrap justify-end">
+                        <button
+                          onClick={() => {
+                            onSelectLevel(lvl.levelNumber);
+                            onClose();
+                          }}
+                          className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                            isCurrent
+                              ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md'
+                              : 'bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white'
+                          }`}
+                        >
+                          <Play className="w-3 h-3 fill-current" />
+                          <span>{isCurrent ? 'START LEVEL' : 'RUN'}</span>
+                        </button>
+
+                        {onRequestAdStartLevel && (
+                          <button
+                            onClick={() => {
+                              onRequestAdStartLevel(lvl.levelNumber);
+                            }}
+                            className="px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md cursor-pointer transition-all active:scale-95"
+                            title="Watch sponsored transmission to immediately deploy into this sector"
+                          >
+                            <Tv className="w-3 h-3" />
+                            <span>WATCH AD TO START</span>
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-[10px] text-slate-600 font-mono">
                         Clear Level {lvl.levelNumber - 1} to unlock

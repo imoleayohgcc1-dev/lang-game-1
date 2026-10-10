@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import { BOMB_CONFIG } from './combatConfig';
+import { BOMB_CONFIG, OBSTACLE_DESTRUCTION_DAMAGE } from './combatConfig';
 import { EnemyInstance } from './EnemyManager';
 import { ObstacleInstance } from './ObstacleManager';
+import { DragonInstance, ThrownDragonObstacle } from './DragonManager';
 
 export interface BombEntity {
   mesh: THREE.Group;
@@ -38,6 +39,9 @@ export class BombManager {
   // Callbacks
   public onBombDetonated?: (center: THREE.Vector3, enemiesDamaged: number) => void;
   public onBombCountChanged?: (count: number) => void;
+  public onObstacleDestroyedByBomb?: (obs: ObstacleInstance) => void;
+  public onDragonDamagedByBomb?: (dragon: DragonInstance, damage: number) => void;
+  public onThrownDestroyedByBomb?: (thrown: ThrownDragonObstacle) => void;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -178,7 +182,13 @@ export class BombManager {
     return this.currentBombs;
   }
 
-  public update(delta: number, enemies: EnemyInstance[], obstacles?: ObstacleInstance[]): void {
+  public update(
+    delta: number,
+    enemies: EnemyInstance[],
+    obstacles?: ObstacleInstance[],
+    dragon?: DragonInstance | null,
+    thrownObstacles?: ThrownDragonObstacle[]
+  ): void {
     if (this.cooldownTimer > 0) {
       this.cooldownTimer = Math.max(0, this.cooldownTimer - delta);
     }
@@ -203,7 +213,7 @@ export class BombManager {
 
       // Detonate upon completion of flight
       if (progress >= 1.0) {
-        this.detonate(bomb, enemies, obstacles);
+        this.detonate(bomb, enemies, obstacles, dragon, thrownObstacles);
       }
     }
 
@@ -236,7 +246,13 @@ export class BombManager {
     }
   }
 
-  private detonate(bomb: BombEntity, enemies: EnemyInstance[], obstacles?: ObstacleInstance[]): void {
+  private detonate(
+    bomb: BombEntity,
+    enemies: EnemyInstance[],
+    obstacles?: ObstacleInstance[],
+    dragon?: DragonInstance | null,
+    thrownObstacles?: ThrownDragonObstacle[]
+  ): void {
     const blastCenter = bomb.mesh.position.clone();
     blastCenter.y = 0.5;
 
@@ -283,16 +299,49 @@ export class BombManager {
       }
     }
 
-    // Also blast away obstacles in radius!
+    // Only destroy designated destructible obstacles in radius!
+    // Non-destructible obstacles (such as steel overhead gantries) are never destroyed by bombs.
     if (obstacles) {
       for (let i = 0; i < obstacles.length; i++) {
         const obs = obstacles[i];
         if (!obs.isActive) continue;
         const dist = Math.hypot(obs.mesh.position.x - blastCenter.x, obs.zPos - blastCenter.z);
         if (dist <= outerRad) {
-          obs.isActive = false;
-          obs.mesh.visible = false;
-          obs.mesh.position.set(0, -100, 0);
+          if (obs.isDestructible) {
+            obs.health -= OBSTACLE_DESTRUCTION_DAMAGE;
+            if (obs.health <= 0) {
+              if (this.onObstacleDestroyedByBomb) {
+                this.onObstacleDestroyedByBomb(obs);
+              } else {
+                obs.isActive = false;
+                obs.mesh.visible = false;
+                obs.mesh.position.set(0, -100, 0);
+              }
+            }
+          }
+          // Non-destructible obstacles remain unaffected
+        }
+      }
+    }
+
+    // Damage active Dragon boss if within explosion radius
+    if (dragon && dragon.isActive && dragon.state !== 'DEFEATED') {
+      const dPos = dragon.mesh.position;
+      const dDist = Math.hypot(dPos.x - blastCenter.x, dPos.z - blastCenter.z);
+      if (dDist <= outerRad * 1.5) {
+        const dragonDmg = BOMB_CONFIG.damage * 2; // High strategic bomb damage vs dragon
+        this.onDragonDamagedByBomb?.(dragon, dragonDmg);
+      }
+    }
+
+    // Destroy active thrown dragon hazards if within blast radius
+    if (thrownObstacles) {
+      for (let i = 0; i < thrownObstacles.length; i++) {
+        const thrown = thrownObstacles[i];
+        if (!thrown.isActive) continue;
+        const tDist = Math.hypot(thrown.mesh.position.x - blastCenter.x, thrown.mesh.position.z - blastCenter.z);
+        if (tDist <= outerRad) {
+          this.onThrownDestroyedByBomb?.(thrown);
         }
       }
     }

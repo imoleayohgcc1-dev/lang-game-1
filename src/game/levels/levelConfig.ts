@@ -64,6 +64,7 @@ export const INITIAL_LEVELS: LevelDefinition[] = [
       starBonusCoins: 15,
     },
     checkpoints: [25, 50, 75],
+    hasDragonEncounter: false,
   },
   {
     levelId: 'level_2',
@@ -112,6 +113,8 @@ export const INITIAL_LEVELS: LevelDefinition[] = [
       starBonusCoins: 20,
     },
     checkpoints: [25, 50, 75],
+    hasDragonEncounter: true,
+    dragonEncounterDistance: 420,
   },
   {
     levelId: 'level_3',
@@ -160,6 +163,8 @@ export const INITIAL_LEVELS: LevelDefinition[] = [
       starBonusCoins: 25,
     },
     checkpoints: [25, 50, 75],
+    hasDragonEncounter: true,
+    dragonEncounterDistance: 550,
   },
   {
     levelId: 'level_4',
@@ -208,6 +213,8 @@ export const INITIAL_LEVELS: LevelDefinition[] = [
       starBonusCoins: 30,
     },
     checkpoints: [25, 50, 75],
+    hasDragonEncounter: true,
+    dragonEncounterDistance: 600,
   },
   {
     levelId: 'level_5',
@@ -256,6 +263,8 @@ export const INITIAL_LEVELS: LevelDefinition[] = [
       starBonusCoins: 35,
     },
     checkpoints: [25, 50, 75],
+    hasDragonEncounter: true,
+    dragonEncounterDistance: 700,
   },
 ];
 
@@ -331,5 +340,7 @@ export function generateProceduralLevel(levelNumber: number): LevelDefinition {
       starBonusCoins: 40,
     },
     checkpoints: [25, 50, 75],
+    hasDragonEncounter: levelNumber % 2 === 0,
+    dragonEncounterDistance: Math.floor(targetDistance * 0.45),
   };
 }

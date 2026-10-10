@@ -30,17 +30,36 @@ import { InputManager } from './InputManager';
 import { AudioManager } from './AudioManager';
 import { BombManager } from './BombManager';
 import { PickupManager } from './PickupManager';
-import { WeaponType, ActiveWeaponState, PickupType } from './combatTypes';
+import { DragonManager, DragonInstance, ThrownDragonObstacle } from './DragonManager';
+import { WeaponType, ActiveWeaponState, PickupType, DragonStatusInfo, ShieldStatusInfo } from './combatTypes';
+import { PlayerHealthManager, DamageSource } from './PlayerHealthManager';
+import { EnemyProjectileManager } from './EnemyProjectileManager';
+import { HumanShooterManager, HumanShooterInstance } from './HumanShooterManager';
+import { AdManager } from './AdManager';
 import {
   WEAPON_CONFIGS,
   BOMB_CONFIG,
-  STARTING_HEALTH,
-  MAX_HEALTH,
+  PLAYER_STARTING_HEALTH,
+  PLAYER_MAX_HEALTH,
   STARTING_AMMO,
   STARTING_BOMBS,
   MAX_BOMBS,
   BIG_BULLET_DURATION,
   MACHINE_GUN_DURATION,
+  SPECIAL_SHOT_COUNT,
+  DRAGON_HEALTH,
+  DRAGON_MAX_HEALTH,
+  DRAGON_REWARD,
+  DRAGON_PROJECTILE_DAMAGE,
+  SMALL_STONE_DAMAGE,
+  OBSTACLE_COLLISION_DAMAGE,
+  BLOCKING_OBSTACLE_DAMAGE,
+  ENEMY_COLLISION_DAMAGE,
+  SPECIAL_BOMB_DAMAGE,
+  SPECIAL_BOMB_RADIUS,
+  SHIELD_DURATION,
+  SHIELD_CONFIG,
+  REWARDED_RETRY_CONFIG,
 } from './combatConfig';
 
 export interface GameMetrics {
@@ -65,6 +84,10 @@ export interface GameMetrics {
   currentMessage?: TemporaryMessageState | null;
   levelProgress?: LevelRuntimeProgress;
   currentLevel?: LevelDefinition;
+  dragonStatus?: DragonStatusInfo | null;
+  shieldStatus?: ShieldStatusInfo | null;
+  canRewardedRetry?: boolean;
+  remainingRewardedRetries?: number;
 }
 
 export type MetricsCallback = (metrics: GameMetrics) => void;
@@ -88,6 +111,12 @@ export class GameManager {
   public levelManager: LevelManager;
   public bombManager: BombManager;
   public pickupManager: PickupManager;
+  public dragonManager: DragonManager;
+  public playerHealthManager: PlayerHealthManager;
+  public enemyProjectileManager: EnemyProjectileManager;
+  public humanShooterManager: HumanShooterManager;
+  public runId: string = 'run_' + Date.now();
+  private lastDragonSpawnDistance: number = 0;
   public onLevelStarted?: (level: LevelDefinition) => void;
   public onLevelCompleted?: (stats: LevelCompletionStats) => void;
   public onLevelFailed?: (stats: LevelFailedStats) => void;
@@ -114,8 +143,8 @@ export class GameManager {
   public weaponMaxDuration: number = 0;
   public bombs: number = STARTING_BOMBS;
   public maxBombs: number = MAX_BOMBS;
-  public health: number = STARTING_HEALTH;
-  public maxHealth: number = STARTING_HEALTH;
+  public health: number = PLAYER_STARTING_HEALTH;
+  public maxHealth: number = PLAYER_MAX_HEALTH;
   public ammo: number = STARTING_AMMO;
   public maxAmmo: number = STARTING_AMMO;
   public isReloading: boolean = false;
@@ -167,7 +196,11 @@ export class GameManager {
     this.enemyManager = new EnemyManager(this.sceneManager.scene);
     this.powerUpManager = new PowerUpManager(this.sceneManager.scene);
     this.bombManager = new BombManager(this.sceneManager.scene);
+    this.dragonManager = new DragonManager(this.sceneManager.scene);
     this.pickupManager = new PickupManager(this.sceneManager.scene);
+    this.playerHealthManager = new PlayerHealthManager(PLAYER_STARTING_HEALTH, PLAYER_MAX_HEALTH);
+    this.enemyProjectileManager = new EnemyProjectileManager(this.sceneManager.scene);
+    this.humanShooterManager = new HumanShooterManager(this.sceneManager.scene, this.enemyProjectileManager);
     this.vfxManager = new VFXManager(this.sceneManager.scene);
     this.achievementManager = new AchievementManager();
     this.messageManager = new TemporaryMessageManager();
@@ -217,8 +250,13 @@ export class GameManager {
     this.sceneManager.applyGraphicsQuality(settings.graphicsQuality);
     this.trackManager.applyTheme(settings.theme, settings.dayNight);
     this.vfxManager.setQuality(settings.graphicsQuality);
+    this.audioManager.setMasterVolume(settings.masterVolume ?? 0.8);
+    this.audioManager.setMusicVolume(settings.musicVolume ?? 0.45);
+    this.audioManager.setSfxVolume(settings.sfxVolume ?? 0.7);
     this.audioManager.setMusicEnabled(settings.musicEnabled);
     this.audioManager.setSoundEnabled(settings.soundEnabled);
+    this.audioManager.setShieldSoundEnabled(settings.shieldSoundEnabled !== false);
+    this.audioManager.setEnemyCombatSoundEnabled(settings.enemyCombatSoundEnabled !== false);
   }
 
   public applyLevelConfig(level: LevelDefinition): void {
@@ -229,6 +267,7 @@ export class GameManager {
     // 2. Obstacle & Enemy Difficulty
     this.obstacleManager.setDifficulty(level.obstacleDifficulty, level.obstacleGapMultiplier);
     this.enemyManager.setDifficulty(level.enemyDifficulty, level.enemySpawnRate, level.maximumActiveEnemies);
+    this.humanShooterManager.setDifficulty(level.enemyDifficulty);
 
     // 3. Collectibles & Power-up pacing
     this.coinManager.setDensity(level.coinDensity);
@@ -264,7 +303,7 @@ export class GameManager {
     this.inputManager.onMoveRight = () => this.moveRight();
     this.inputManager.onJump = () => this.jump();
     this.inputManager.onSlide = () => this.slide();
-    this.inputManager.onShoot = () => this.shoot();
+    this.inputManager.onShoot = (side) => this.shoot(side);
     this.inputManager.onBomb = () => this.throwBomb();
 
     this.inputManager.onTogglePause = () => {
@@ -306,7 +345,8 @@ export class GameManager {
       this.vfxManager.triggerPowerUpCollect(this.player.position, cfg.COLOR);
 
       if (type === 'SHIELD') {
-        this.player.setShieldActive(true);
+        this.playerHealthManager.activateShield(SHIELD_DURATION);
+        this.audioManager.playShieldActivateSound();
       } else if (type === 'MAGNET') {
         this.player.setMagnetActive(true);
       }
@@ -317,7 +357,7 @@ export class GameManager {
 
     this.powerUpManager.onPowerUpExpired = (type) => {
       if (type === 'SHIELD') {
-        this.player.setShieldActive(false);
+        this.playerHealthManager.deactivateShield();
       } else if (type === 'MAGNET') {
         this.player.setMagnetActive(false);
       }
@@ -331,7 +371,7 @@ export class GameManager {
 
     this.pickupManager.onEffectExpired = (type) => {
       if (type === 'SHIELD') {
-        this.player.setShieldActive(false);
+        this.playerHealthManager.deactivateShield();
       } else if (type === 'MAGNET') {
         this.player.setMagnetActive(false);
       }
@@ -342,10 +382,20 @@ export class GameManager {
     this.bombManager.onBombDetonated = (center, hitCount) => {
       this.audioManager.playBombExplosionSound();
       this.vfxManager.triggerEnemyDefeat(center);
-      if (hitCount > 0) {
-        this.enemiesDefeatedCount += hitCount;
-        this.score += hitCount * 150;
-        this.showMessage(`EMP BLAST: ${hitCount} ENEMIES HIT`, 1800, 'combat');
+      // Also damage human shooters in blast radius
+      let humanShootersHit = 0;
+      for (const shooter of this.humanShooterManager.pool) {
+        if (!shooter.isActive || shooter.isDefeated) continue;
+        if (shooter.mesh.position.distanceTo(center) <= SPECIAL_BOMB_RADIUS) {
+          this.humanShooterManager.damageShooter(shooter, SPECIAL_BOMB_DAMAGE);
+          humanShootersHit++;
+        }
+      }
+      const totalHits = hitCount + humanShootersHit;
+      if (totalHits > 0) {
+        this.enemiesDefeatedCount += totalHits;
+        this.score += totalHits * 150;
+        this.showMessage(`EMP BLAST: ${totalHits} ENEMIES HIT`, 1800, 'combat');
       }
       this.broadcastMetrics();
     };
@@ -355,18 +405,214 @@ export class GameManager {
       this.broadcastMetrics();
     };
 
-    // 7. Obstacle collision hook
-    this.obstacleManager.onCollision = (_obstacle: ObstacleInstance) => {
-      this.handlePlayerCollisionDamage();
+    this.bombManager.onObstacleDestroyedByBomb = (obs) => {
+      this.obstacleManager.destroyObstacle(obs);
     };
 
-    // 8. Enemy hooks
+    this.bombManager.onDragonDamagedByBomb = (dragon, damage) => {
+      this.dragonManager.hitDragon(dragon, damage);
+    };
+
+    this.bombManager.onThrownDestroyedByBomb = (thrown) => {
+      this.dragonManager.destroyThrownObstacle(thrown);
+    };
+
+    // 7. Player Health Manager hooks (Unified Lifespan & Shield System)
+    this.playerHealthManager.onHealthChanged = (current, max) => {
+      this.health = current;
+      this.maxHealth = max;
+      this.onPlayerHealthChanged?.(current, max);
+      this.broadcastMetrics();
+    };
+
+    this.playerHealthManager.onDamageTaken = (_amount, remaining, _source) => {
+      this.tookDamageInLevel = true;
+      this.player.triggerDamage();
+      this.audioManager.playPlayerDamageSound();
+      this.onPlayerDamaged?.(remaining);
+      this.broadcastMetrics();
+    };
+
+    this.playerHealthManager.onShieldHit = (_source) => {
+      this.player.triggerShieldHitEffect();
+      this.audioManager.playShieldDeflectSound();
+      this.showMessage('🛡️ ENERGY GLOBE DEFLECTED ATTACK', 1200, 'powerup');
+      this.broadcastMetrics();
+    };
+
+    this.playerHealthManager.onShieldChanged = (active, _remainingDuration, isExpiringSoon) => {
+      this.player.setShieldActive(active, isExpiringSoon);
+      this.broadcastMetrics();
+    };
+
+    this.playerHealthManager.onShieldExpired = () => {
+      this.player.setShieldActive(false);
+      this.audioManager.playShieldExpireSound();
+      this.showMessage('🛡️ ENERGY GLOBE EXPIRED', 1400, 'gameplay');
+      this.broadcastMetrics();
+    };
+
+    this.playerHealthManager.onDeath = () => {
+      this.levelManager.failLevel({
+        distance: this.distance,
+        score: this.score,
+        coins: this.coins,
+        enemiesDefeated: this.enemiesDefeatedCount,
+        bombsUsed: 0,
+        cause: 'Lifespan Depleted',
+      });
+      this.player.die();
+      this.audioManager.playCrashSound();
+      this.audioManager.playGameOverSound();
+      this.saveHighScore(this.score);
+      this.achievementManager.unlock('FIRST_RUN');
+      this.stateManager.setState('GAME_OVER');
+      this.broadcastMetrics();
+    };
+
+    // 8. Enemy Projectile Manager hooks
+    this.enemyProjectileManager.onPlayerHit = (damage, source) => {
+      const dmgSource: DamageSource =
+        source === 'DRAGON'
+          ? 'DRAGON_PROJECTILE'
+          : source === 'HUMAN'
+          ? 'HUMAN_PROJECTILE'
+          : 'ENEMY_PROJECTILE';
+      this.handlePlayerCollisionDamage(damage, dmgSource);
+    };
+
+    this.enemyProjectileManager.onProjectileDestroyed = (pos) => {
+      this.vfxManager.triggerEnemyDefeat(pos);
+      this.score += 25;
+      this.broadcastMetrics();
+    };
+
+    // 8B. Human Shooter Enemy hooks (Phase 14)
+    this.humanShooterManager.onEnemySpawned = (enemy) => {
+      if (enemy.type === 'ELITE') {
+        this.audioManager.playEliteEncounterSound();
+        this.audioManager.musicManager.transitionToEliteCombatMusic();
+        this.showMessage('⚠ ELITE VANGUARD SHOOTER DETECTED!', 1800, 'warning');
+      } else {
+        this.audioManager.playHumanEnemyAlertSound();
+        this.audioManager.musicManager.transitionToHumanCombatMusic();
+      }
+    };
+
+    this.humanShooterManager.onEnemyAiming = (_enemy, laneIndex) => {
+      this.audioManager.playHumanEnemyAimSound();
+      const laneName = laneIndex === 0 ? 'LEFT' : laneIndex === 1 ? 'CENTER' : 'RIGHT';
+      this.showMessage(`⚠ SHOOTER AIMING: ${laneName} LANE`, 1100, 'warning');
+    };
+
+    this.humanShooterManager.onEnemyShoot = (_enemy) => {
+      this.audioManager.playHumanEnemyShootSound();
+    };
+
+    this.humanShooterManager.onEnemyHit = (_enemy) => {
+      this.audioManager.playHumanEnemyHurtSound();
+      this.score += 20;
+      this.broadcastMetrics();
+    };
+
+    this.humanShooterManager.onEnemyDefeated = (enemy) => {
+      this.audioManager.playHumanEnemyDefeatSound();
+      this.score += enemy.scoreReward;
+      this.coins += enemy.coinReward;
+      this.enemiesDefeatedCount++;
+      this.vfxManager.triggerEnemyDefeat(enemy.mesh.position);
+      this.pickupManager.spawnEnemyDrop(enemy.mesh.position, enemy.laneIndex);
+      this.showMessage(`+${enemy.coinReward} CREDITS (SHOOTER ELIMINATED)`, 1500, 'combat');
+      this.broadcastMetrics();
+
+      if (this.humanShooterManager.getActiveCount() === 0 && !this.dragonManager.hasActiveDragon()) {
+        this.audioManager.musicManager.transitionToGameplayMusic();
+      }
+    };
+
+    // 9. Obstacle hooks
+    this.obstacleManager.onCollision = (obs: ObstacleInstance) => {
+      if (obs.type === 'RED_STONE') {
+        this.handlePlayerCollisionDamage(SMALL_STONE_DAMAGE, 'STONE');
+        this.audioManager.playStoneHitSound();
+        this.showMessage('STONE SCRAPE -5 HP', 1200, 'gameplay');
+      } else if (obs.type === 'BLOCKING') {
+        this.handlePlayerCollisionDamage(BLOCKING_OBSTACLE_DAMAGE, 'OBSTACLE');
+      } else {
+        this.handlePlayerCollisionDamage(OBSTACLE_COLLISION_DAMAGE, 'OBSTACLE');
+      }
+    };
+
+    this.obstacleManager.onDestroyed = (_obstacle: ObstacleInstance) => {
+      this.audioManager.playObstacleDestructionSound();
+      this.score += 50;
+      this.broadcastMetrics();
+    };
+
+    // 10. Dragon Boss hooks
+    this.dragonManager.onDragonSpawned = (_dragon: DragonInstance) => {
+      this.audioManager.playDragonMusic();
+      this.audioManager.playDragonWarningSound();
+      this.showMessage('⚡ DRAGON APPROACHING!', 2200, 'warning');
+      this.broadcastMetrics();
+    };
+
+    this.dragonManager.onAttackWarning = (_pattern, laneIndex) => {
+      this.audioManager.playDragonWarningSound();
+      const laneName = laneIndex === 0 ? 'LEFT' : laneIndex === 1 ? 'CENTER' : 'RIGHT';
+      this.showMessage(`⚠ DRAGON ATTACK: ${laneName} LANE`, 1600, 'warning');
+      this.broadcastMetrics();
+    };
+
+    this.dragonManager.onAttackLaunched = (_obstacle: ThrownDragonObstacle) => {
+      this.audioManager.playDragonAttackSound();
+    };
+
+    this.dragonManager.onDragonHit = (_dragon: DragonInstance, _remainingHp: number) => {
+      this.audioManager.playDragonHitSound();
+      this.score += 100;
+      this.broadcastMetrics();
+    };
+
+    this.dragonManager.onDragonDefeated = (dragon: DragonInstance, position: THREE.Vector3, rewardDrop: PickupType) => {
+      this.audioManager.playDragonDefeatSound();
+      this.score += DRAGON_REWARD;
+      this.showMessage('🏆 DRAGON DEFEATED! +1000 PTS', 2800, 'success');
+      this.audioManager.startAmbientMusic(); // Smooth transition back to gameplay soundtrack
+      this.pickupManager.spawn(rewardDrop, dragon.targetLaneIndex, position.z);
+      this.broadcastMetrics();
+    };
+
+    this.dragonManager.onThrownObstacleDestroyed = (obstacle: ThrownDragonObstacle) => {
+      this.audioManager.playObstacleDestructionSound();
+      this.score += 75;
+      this.vfxManager.triggerEnemyDefeat(obstacle.mesh.position);
+      this.broadcastMetrics();
+    };
+
+    // 11. Enemy hooks
     this.enemyManager.onEnemySpawned = (enemy: EnemyInstance) => {
       this.onEnemySpawned?.(enemy);
     };
 
     this.enemyManager.onEnemyHit = (enemy: EnemyInstance, remaining: number) => {
       this.onEnemyHit?.(enemy, remaining);
+    };
+
+    this.enemyManager.onEnemyShoot = (_enemy, origin, target, damage) => {
+      this.enemyProjectileManager.spawn(
+        origin,
+        target,
+        _enemy.type === 'ARMORED' ? 'BEAST' : 'DRONE',
+        damage
+      );
+      this.audioManager.playEnemyShootSound();
+    };
+
+    this.enemyManager.onEnemyWarning = (_enemy, laneIndex) => {
+      this.audioManager.playWarningSound();
+      const laneName = laneIndex === 0 ? 'LEFT' : laneIndex === 1 ? 'CENTER' : 'RIGHT';
+      this.showMessage(`⚠ ENEMY AIMING: ${laneName} LANE`, 1200, 'warning');
     };
 
     this.enemyManager.onEnemyDefeated = (enemy: EnemyInstance) => {
@@ -390,12 +636,13 @@ export class GameManager {
 
     // 9. Level progression hooks
     this.levelManager.onLevelCompleted = (stats) => {
-      this.audioManager.playPowerUpSound();
+      this.audioManager.musicManager.playVictoryMusic();
       this.broadcastMetrics();
       this.onLevelCompleted?.(stats);
     };
 
     this.levelManager.onLevelFailed = (stats) => {
+      this.audioManager.musicManager.playGameOverMusic();
       this.broadcastMetrics();
       this.onLevelFailed?.(stats);
     };
@@ -411,12 +658,20 @@ export class GameManager {
       this.onLevelStarted?.(level);
     };
 
-    // 8. State changes
+    // 10. State changes and music transitions
     this.stateManager.subscribe((newState) => {
       if (newState === 'PLAYING') {
-        this.audioManager.startAmbientMusic();
-      } else if (newState === 'PAUSED' || newState === 'READY' || newState === 'GAME_OVER') {
+        if (this.dragonManager && this.dragonManager.hasActiveDragon()) {
+          this.audioManager.playDragonMusic();
+        } else {
+          this.audioManager.startAmbientMusic();
+        }
+      } else if (newState === 'READY') {
+        this.audioManager.playMenuMusic();
+      } else if (newState === 'PAUSED') {
         this.audioManager.stopAmbientMusic();
+      } else if (newState === 'GAME_OVER') {
+        this.audioManager.musicManager.playGameOverMusic();
       }
     });
   }
@@ -469,7 +724,7 @@ export class GameManager {
     return false;
   }
 
-  public shoot(): boolean {
+  public shoot(preferSide?: 'LEFT' | 'RIGHT' | 'AUTO'): boolean {
     if (!this.stateManager.isPlaying() || this.player.state === 'DEAD') {
       return false;
     }
@@ -492,18 +747,34 @@ export class GameManager {
     this.ammo -= 1;
     this.fireCooldownTimer = spec.fireCooldown;
 
-    this.player.getMuzzleWorldPosition(this.tempMuzzlePos);
+    // Get muzzle position respecting left-side or twin-barrel alternation
+    this.player.getMuzzleWorldPosition(this.tempMuzzlePos, preferSide);
 
     const bestTarget = this.enemyManager.findBestTarget(
       this.player.position,
       this.player.currentLaneIndex
     );
 
-    this.projectileManager.spawn(this.tempMuzzlePos, this.tempForwardDir, bestTarget, this.activeWeapon);
+    const activeDragon = this.dragonManager.getActiveDragon();
+    let fireDir = this.tempForwardDir;
+    if (!bestTarget && activeDragon && activeDragon.mesh.position.z < this.player.position.z) {
+      fireDir = activeDragon.mesh.position.clone().sub(this.tempMuzzlePos).normalize();
+    }
+
+    this.projectileManager.spawn(this.tempMuzzlePos, fireDir, bestTarget, this.activeWeapon);
     this.audioManager.playShootSound(this.activeWeapon);
 
     if (this.ammo <= 0) {
-      this.triggerReload();
+      if (this.activeWeapon === 'SPECIAL_BOMB') {
+        // Special Star Bomb ammo depleted: revert to normal weapon
+        this.activeWeapon = 'NORMAL';
+        this.player.transformWeapon('NORMAL');
+        this.ammo = WEAPON_CONFIGS.NORMAL.magazineSize;
+        this.maxAmmo = WEAPON_CONFIGS.NORMAL.magazineSize;
+        this.showMessage('Weapon: Normal Blaster', 1200, 'combat');
+      } else {
+        this.triggerReload();
+      }
     }
 
     this.broadcastMetrics();
@@ -541,18 +812,17 @@ export class GameManager {
         break;
       }
       case 'HEALTH': {
-        this.health = Math.min(this.maxHealth, this.health + 1);
+        this.playerHealthManager.heal(25);
         this.audioManager.playPickupSound('HEALTH');
         this.vfxManager.triggerPowerUpCollect(this.player.position, 0xef4444);
-        this.showMessage('+1 HEALTH RESTORED', 1800, 'gameplay');
+        this.showMessage('+25 HP RESTORED', 1800, 'gameplay');
         break;
       }
       case 'MAX_HEALTH': {
-        this.maxHealth = Math.min(MAX_HEALTH, this.maxHealth + 1);
-        this.health = Math.min(this.maxHealth, this.health + 1);
+        this.playerHealthManager.upgradeMaxHealth(20);
         this.audioManager.playPickupSound('MAX_HEALTH');
         this.vfxManager.triggerPowerUpCollect(this.player.position, 0xf43f5e);
-        this.showMessage(`MAX HEALTH UPGRADED (${this.maxHealth}/${MAX_HEALTH})`, 2500, 'powerup');
+        this.showMessage(`MAX HEALTH UPGRADED (${this.playerHealthManager.maxHealth} HP)`, 2500, 'powerup');
         break;
       }
       case 'BOMB': {
@@ -570,9 +840,10 @@ export class GameManager {
         this.ammo = WEAPON_CONFIGS.BIG_BULLET.magazineSize;
         this.maxAmmo = WEAPON_CONFIGS.BIG_BULLET.magazineSize;
         this.isReloading = false;
+        this.player.transformWeapon('BIG_BULLET');
         this.audioManager.playPickupSound('BIG_BULLET');
         this.vfxManager.triggerPowerUpCollect(this.player.position, 0xf59e0b);
-        this.showMessage('BIG BULLET ACTIVE - Damage ×2', 2500, 'combat');
+        this.showMessage('HEAVY PLASMA CANNON (3x Damage)', 2500, 'combat');
         break;
       }
       case 'MACHINE_GUN': {
@@ -582,16 +853,30 @@ export class GameManager {
         this.ammo = WEAPON_CONFIGS.MACHINE_GUN.magazineSize;
         this.maxAmmo = WEAPON_CONFIGS.MACHINE_GUN.magazineSize;
         this.isReloading = false;
+        this.player.transformWeapon('MACHINE_GUN');
         this.audioManager.playPickupSound('MACHINE_GUN');
         this.vfxManager.triggerPowerUpCollect(this.player.position, 0xec4899);
-        this.showMessage('MACHINE GUN ACTIVE - Rapid Fire', 2500, 'combat');
+        this.showMessage('PULSE GATLING (Rapid Fire)', 2500, 'combat');
+        break;
+      }
+      case 'STAR': {
+        this.activeWeapon = 'SPECIAL_BOMB';
+        this.weaponDurationRemaining = 0; // Shot-based (5 explosive shots)
+        this.weaponMaxDuration = 0;
+        this.ammo = SPECIAL_SHOT_COUNT;
+        this.maxAmmo = SPECIAL_SHOT_COUNT;
+        this.isReloading = false;
+        this.player.transformWeapon('SPECIAL_BOMB');
+        this.audioManager.playPickupSound('STAR');
+        this.vfxManager.triggerPowerUpCollect(this.player.position, 0xd946ef);
+        this.showMessage('★ STAR POWER (5 Transformed Special Bombs)', 2500, 'combat');
         break;
       }
       case 'SHIELD': {
-        this.player.setShieldActive(true);
-        this.audioManager.playPowerUpSound();
+        this.playerHealthManager.activateShield(SHIELD_DURATION);
+        this.audioManager.playShieldActivateSound();
         this.vfxManager.triggerPowerUpCollect(this.player.position, 0x10b981);
-        this.showMessage('ENERGY SHIELD ACTIVE', 2000, 'powerup');
+        this.showMessage('PROTECTIVE SHIELD ACTIVE', 2000, 'powerup');
         break;
       }
       case 'MAGNET': {
@@ -620,47 +905,17 @@ export class GameManager {
   }
 
   /**
-   * Inflict damage on player from obstacle or enemy collision
+   * Inflict damage on player from obstacle, projectile, or enemy collision.
+   * Centralized through PlayerHealthManager (Unified Lifespan & Shield system).
    */
-  public handlePlayerCollisionDamage(amount: number = 1): void {
-    if (this.player.isInvulnerable || this.player.state === 'DEAD' || !this.stateManager.isPlaying()) {
+  public handlePlayerCollisionDamage(
+    amount: number = OBSTACLE_COLLISION_DAMAGE,
+    source: DamageSource = 'OBSTACLE'
+  ): void {
+    if (this.player.state === 'DEAD' || !this.stateManager.isPlaying()) {
       return;
     }
-
-    // Shield check: protects player from 1 hit!
-    if (this.powerUpManager.consumeShield()) {
-      this.player.setShieldActive(false);
-      this.audioManager.playShieldAbsorbSound();
-      this.player.triggerDamage(0.6); // brief invulnerability flash
-      this.broadcastMetrics();
-      return;
-    }
-
-    this.tookDamageInLevel = true;
-    this.health = Math.max(0, this.health - amount);
-    this.audioManager.playPlayerDamageSound();
-    this.player.triggerDamage();
-    this.onPlayerDamaged?.(this.health);
-    this.onPlayerHealthChanged?.(this.health, this.maxHealth);
-
-    if (this.health <= 0) {
-      this.levelManager.failLevel({
-        distance: this.distance,
-        score: this.score,
-        coins: this.coins,
-        enemiesDefeated: this.enemiesDefeatedCount,
-        bombsUsed: 0,
-        cause: 'Obstacle / Enemy Collision',
-      });
-      this.player.die();
-      this.audioManager.playCrashSound();
-      this.audioManager.playGameOverSound();
-      this.saveHighScore(this.score);
-      this.achievementManager.unlock('FIRST_RUN');
-      this.stateManager.setState('GAME_OVER');
-    }
-
-    this.broadcastMetrics();
+    this.playerHealthManager.takeDamage(amount, source);
   }
 
   private seedInitialCoins(): void {
@@ -720,17 +975,25 @@ export class GameManager {
     this.weaponDurationRemaining = 0;
     this.weaponMaxDuration = 0;
     this.bombs = STARTING_BOMBS;
-    this.health = STARTING_HEALTH;
-    this.maxHealth = STARTING_HEALTH;
     this.ammo = STARTING_AMMO;
     this.maxAmmo = STARTING_AMMO;
     this.isReloading = false;
     this.reloadTimer = 0;
     this.fireCooldownTimer = 0;
 
+    this.playerHealthManager.reset(PLAYER_STARTING_HEALTH, PLAYER_MAX_HEALTH);
+    this.health = this.playerHealthManager.currentHealth;
+    this.maxHealth = this.playerHealthManager.maxHealth;
+    this.enemyProjectileManager.reset();
+
     this.player.reset();
+    this.player.transformWeapon('NORMAL');
     this.obstacleManager.reset();
     this.enemyManager.reset();
+    this.humanShooterManager.reset();
+    this.dragonManager.reset();
+    this.runId = 'run_' + Date.now();
+    this.lastDragonSpawnDistance = 0;
     this.powerUpManager.reset();
     this.pickupManager.reset();
     this.bombManager.reset(STARTING_BOMBS);
@@ -763,17 +1026,25 @@ export class GameManager {
     this.weaponDurationRemaining = 0;
     this.weaponMaxDuration = 0;
     this.bombs = STARTING_BOMBS;
-    this.health = STARTING_HEALTH;
-    this.maxHealth = STARTING_HEALTH;
     this.ammo = STARTING_AMMO;
     this.maxAmmo = STARTING_AMMO;
     this.isReloading = false;
     this.reloadTimer = 0;
     this.fireCooldownTimer = 0;
 
+    this.playerHealthManager.reset(PLAYER_STARTING_HEALTH, PLAYER_MAX_HEALTH);
+    this.health = this.playerHealthManager.currentHealth;
+    this.maxHealth = this.playerHealthManager.maxHealth;
+    this.enemyProjectileManager.reset();
+
     this.player.reset();
+    this.player.transformWeapon('NORMAL');
     this.obstacleManager.reset();
     this.enemyManager.reset();
+    this.humanShooterManager.reset();
+    this.dragonManager.reset();
+    this.runId = 'run_' + Date.now();
+    this.lastDragonSpawnDistance = 0;
     this.powerUpManager.reset();
     this.pickupManager.reset();
     this.bombManager.reset(STARTING_BOMBS);
@@ -844,11 +1115,55 @@ export class GameManager {
       // Update obstacles & check collision
       this.obstacleManager.update(this.player.position.z, this.player.getBoundingBox(), isPlaying, delta);
 
+      // Update Dragon Boss and Thrown Projectiles
+      this.dragonManager.update(delta, this.player.position.z, this.player.getBoundingBox(), isPlaying);
+
+      // Check dynamic Dragon Boss Spawning:
+      // Spawns smoothly after 80m and every ~280m interval if no dragon is currently active
+      if (
+        isPlaying &&
+        !this.dragonManager.hasActiveDragon() &&
+        this.distance >= 80 &&
+        this.distance - this.lastDragonSpawnDistance >= 280
+      ) {
+        this.dragonManager.spawnDragon(this.player.position.z, DRAGON_HEALTH);
+        this.lastDragonSpawnDistance = this.distance;
+      }
+
+      // Check player collision with landed thrown dragon obstacles
+      if (isPlaying && !this.player.isInvulnerable) {
+        const playerBox = this.player.getBoundingBox();
+        for (let i = 0; i < this.dragonManager.thrownPool.length; i++) {
+          const item = this.dragonManager.thrownPool[i];
+          if (!item.isActive || item.isFlying) continue;
+          if (playerBox.intersectsBox(item.boundingBox)) {
+            this.handlePlayerCollisionDamage(DRAGON_PROJECTILE_DAMAGE, 'DRAGON_HAZARD');
+            this.dragonManager.destroyThrownObstacle(item);
+            break;
+          }
+        }
+      }
+
       // Update enemies
       this.enemyManager.update(delta, this.player.position, isPlaying);
 
-      // Update bombs & blast area
-      this.bombManager.update(delta, this.enemyManager.pool, this.obstacleManager.pool);
+      // Update human shooter enemies (Phase 14)
+      this.humanShooterManager.update(delta, this.player.position, this.player.currentLaneIndex, isPlaying);
+
+      // Update incoming enemy projectiles
+      this.enemyProjectileManager.update(delta, this.player.position, this.player.getBoundingBox(), isPlaying);
+
+      // Update player health lifespan and shield countdown
+      this.playerHealthManager.update(delta);
+
+      // Update bombs & blast area (enemies, destructible obstacles, dragon & thrown hazards)
+      this.bombManager.update(
+        delta,
+        this.enemyManager.pool,
+        this.obstacleManager.pool,
+        this.dragonManager.getActiveDragon(),
+        this.dragonManager.thrownPool
+      );
 
       // Check player vs enemy collision
       if (!this.player.isInvulnerable) {
@@ -858,24 +1173,80 @@ export class GameManager {
           if (!enemy.isActive || enemy.isDefeated) continue;
 
           if (playerBox.intersectsBox(enemy.boundingBox)) {
-            this.handlePlayerCollisionDamage(1);
-            this.enemyManager.hitEnemy(enemy, 1);
+            this.handlePlayerCollisionDamage(ENEMY_COLLISION_DAMAGE, 'ENEMY_COLLISION');
+            this.enemyManager.hitEnemy(enemy, 50);
+            break;
+          }
+        }
+
+        // Check player vs human shooter collision
+        for (let i = 0; i < this.humanShooterManager.pool.length; i++) {
+          const shooter = this.humanShooterManager.pool[i];
+          if (!shooter.isActive || shooter.isDefeated) continue;
+
+          if (playerBox.intersectsBox(shooter.boundingBox)) {
+            this.handlePlayerCollisionDamage(ENEMY_COLLISION_DAMAGE, 'ENEMY_COLLISION');
+            this.humanShooterManager.damageShooter(shooter, 40);
             break;
           }
         }
       }
 
-      // Update projectiles & hits
-      this.projectileManager.update(delta, this.enemyManager.pool, (enemy, proj) => {
-        this.audioManager.playHitSound();
-        this.enemyManager.hitEnemy(enemy, proj.damage);
-      });
+      // Update projectiles & hits (enemies, obstacles, dragon, thrown hazards, enemy projectiles)
+      this.projectileManager.update(
+        delta,
+        this.enemyManager.pool,
+        (enemy, proj) => {
+          this.audioManager.playHitSound();
+          this.enemyManager.hitEnemy(enemy, proj.damage);
+        },
+        this.obstacleManager.pool,
+        (obs, proj) => {
+          this.audioManager.playHitSound();
+          this.obstacleManager.damageObstacle(obs, proj.damage);
+        },
+        this.dragonManager.getActiveDragon(),
+        (dragon, proj) => {
+          this.dragonManager.hitDragon(dragon, proj.damage);
+        },
+        this.dragonManager.thrownPool,
+        (thrown, proj) => {
+          this.audioManager.playHitSound();
+          this.dragonManager.damageThrownObstacle(thrown, proj.damage);
+        },
+        this.enemyProjectileManager.pool,
+        (ep, proj) => {
+          this.audioManager.playHitSound();
+          this.enemyProjectileManager.destroyProjectile(ep);
+          this.score += 25;
+          this.broadcastMetrics();
+        }
+      );
+
+      // Check player projectiles against human shooters
+      for (let p = 0; p < this.projectileManager.pool.length; p++) {
+        const proj = this.projectileManager.pool[p];
+        if (!proj.isActive) continue;
+
+        for (let h = 0; h < this.humanShooterManager.pool.length; h++) {
+          const shooter = this.humanShooterManager.pool[h];
+          if (!shooter.isActive || shooter.isDefeated) continue;
+
+          if (proj.boundingBox.intersectsBox(shooter.boundingBox)) {
+            this.audioManager.playHitSound();
+            this.humanShooterManager.damageShooter(shooter, proj.damage);
+            this.projectileManager.deactivate(proj);
+            break;
+          }
+        }
+      }
 
       // Weapon duration countdown
       if (this.activeWeapon !== 'NORMAL') {
         this.weaponDurationRemaining -= delta;
         if (this.weaponDurationRemaining <= 0) {
           this.activeWeapon = 'NORMAL';
+          this.player.transformWeapon('NORMAL');
           this.weaponDurationRemaining = 0;
           this.weaponMaxDuration = 0;
           this.maxAmmo = WEAPON_CONFIGS.NORMAL.magazineSize;
@@ -965,6 +1336,17 @@ export class GameManager {
         }
       });
 
+      // Ensure active shield energy globe is represented in active powerups
+      if (this.playerHealthManager.isShieldActive && !powerUps.some((p) => p.type === 'SHIELD')) {
+        powerUps.unshift({
+          type: 'SHIELD',
+          name: 'Energy Globe',
+          color: 0x10b981,
+          remainingDuration: this.playerHealthManager.shieldDurationRemaining,
+          maxDuration: this.playerHealthManager.shieldMaxDuration,
+        });
+      }
+
       this.onMetricsUpdate({
         score: this.score,
         coins: this.coins,
@@ -997,11 +1379,81 @@ export class GameManager {
         currentMessage: this.messageManager.getCurrentMessage(),
         levelProgress: this.levelManager.runtimeProgress,
         currentLevel: this.levelManager.currentLevel,
+        dragonStatus: (() => {
+          const activeDragon = this.dragonManager.getActiveDragon();
+          if (!activeDragon) return null;
+          return {
+            isActive: true,
+            health: activeDragon.health,
+            maxHealth: activeDragon.maxHealth,
+            isCharging: activeDragon.state === 'CHARGING',
+            state: activeDragon.state,
+          };
+        })(),
+        shieldStatus: {
+          isActive: this.playerHealthManager.isShieldActive,
+          remainingDuration: this.playerHealthManager.shieldDurationRemaining,
+          maxDuration: this.playerHealthManager.shieldMaxDuration,
+          isExpiringSoon: this.playerHealthManager.isShieldExpiringSoon(),
+        },
+        canRewardedRetry: this.canUseRewardedRetry(),
+        remainingRewardedRetries: this.getRemainingRewardedRetries(),
       });
     }
   }
 
+  public canUseRewardedRetry(): boolean {
+    return AdManager.getInstance().canUseRewardedRetry(this.runId);
+  }
+
+  public getRemainingRewardedRetries(): number {
+    return AdManager.getInstance().getRemainingRewardedRetries(this.runId);
+  }
+
+  public revivePlayerWithReward(): boolean {
+    if (!this.canUseRewardedRetry()) return false;
+    AdManager.getInstance().recordRewardedRetryUsed(this.runId);
+
+    // 1. Restore health (50% of max health)
+    const restoreAmount = Math.round(
+      (this.playerHealthManager.maxHealth * REWARDED_RETRY_CONFIG.restoreHealthPercent) / 100
+    );
+    this.playerHealthManager.reset(restoreAmount, this.playerHealthManager.maxHealth);
+    this.health = this.playerHealthManager.currentHealth;
+    this.maxHealth = this.playerHealthManager.maxHealth;
+
+    // 2. Grant temporary revival invulnerability & shield globe
+    this.player.setInvulnerable(REWARDED_RETRY_CONFIG.revivalInvulnerabilitySeconds);
+    this.playerHealthManager.activateShield(SHIELD_DURATION);
+
+    // 3. Clear nearby hostile projectiles & clear immediate obstacles
+    this.enemyProjectileManager.reset();
+
+    const playerZ = this.player.position.z;
+    for (const obs of this.obstacleManager.pool) {
+      if (obs.isActive && obs.mesh.position.z < playerZ && obs.mesh.position.z > playerZ - 25) {
+        this.obstacleManager.damageObstacle(obs, 9999);
+      }
+    }
+
+    // 4. Reset player state from DEAD back to RUNNING
+    this.player.state = 'RUNNING';
+    this.player.isGrounded = true;
+    this.player.verticalVelocity = 0;
+    this.player.mesh.position.y = 0;
+    this.player.mesh.rotation.set(0, 0, 0);
+
+    // 5. Resume game state to PLAYING
+    this.stateManager.setState('PLAYING');
+    this.audioManager.musicManager.transitionToGameplayMusic();
+    this.showMessage('🛡️ RUN REVIVED! 50% HP + ENERGY SHIELD ACTIVE', 2500, 'powerup');
+    this.broadcastMetrics();
+
+    return true;
+  }
+
   public startLevel(levelNumberOrId: number | string): LevelDefinition {
+    this.runId = 'run_' + Date.now();
     this.restart();
     const level = this.levelManager.startLevel(levelNumberOrId);
     this.applyLevelConfig(level);
@@ -1030,9 +1482,11 @@ export class GameManager {
     this.vfxManager.dispose();
     this.powerUpManager.dispose();
     this.pickupManager.dispose();
+    this.dragonManager.dispose();
     this.bombManager.dispose();
     this.projectileManager.dispose();
     this.enemyManager.dispose();
+    this.humanShooterManager.dispose();
     this.obstacleManager.dispose();
     this.coinManager.dispose();
     this.trackManager.dispose();

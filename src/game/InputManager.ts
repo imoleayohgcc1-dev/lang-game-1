@@ -13,7 +13,7 @@ export class InputManager {
   public onMoveRight?: () => void;
   public onJump?: () => void;
   public onSlide?: () => void;
-  public onShoot?: () => void;
+  public onShoot?: (side?: 'LEFT' | 'RIGHT' | 'AUTO') => void;
   public onBomb?: () => void;
   public onReload?: () => void;
   public onTogglePause?: () => void;
@@ -56,9 +56,19 @@ export class InputManager {
         e.preventDefault();
         this.onSlide?.();
         break;
+      case 'KeyQ':
+      case 'KeyZ':
+        e.preventDefault();
+        this.onShoot?.('LEFT');
+        break;
+      case 'KeyE':
+      case 'KeyX':
+        e.preventDefault();
+        this.onShoot?.('RIGHT');
+        break;
       case 'KeyF':
         e.preventDefault();
-        this.onShoot?.();
+        this.onShoot?.('AUTO');
         break;
       case 'KeyB':
       case 'KeyG':

@@ -3,6 +3,9 @@ import { GAME_CONFIG } from './constants';
 import { WeaponType } from './combatTypes';
 import { WEAPON_CONFIGS } from './combatConfig';
 import { EnemyInstance } from './EnemyManager';
+import { ObstacleInstance } from './ObstacleManager';
+import { DragonInstance, ThrownDragonObstacle } from './DragonManager';
+import { EnemyProjectileInstance } from './EnemyProjectileManager';
 
 export interface ProjectileInstance {
   mesh: THREE.Group;
@@ -19,7 +22,7 @@ export interface ProjectileInstance {
 
 export class ProjectileManager {
   private scene: THREE.Scene;
-  private pool: ProjectileInstance[] = [];
+  public pool: ProjectileInstance[] = [];
   private poolSize = 40;
 
   // Shared geometries
@@ -129,7 +132,15 @@ export class ProjectileManager {
   public update(
     delta: number,
     enemies: EnemyInstance[],
-    onHit?: (enemy: EnemyInstance, proj: ProjectileInstance) => void
+    onHit?: (enemy: EnemyInstance, proj: ProjectileInstance) => void,
+    obstacles?: ObstacleInstance[],
+    onHitObstacle?: (obs: ObstacleInstance, proj: ProjectileInstance) => void,
+    dragon?: DragonInstance | null,
+    onHitDragon?: (dragon: DragonInstance, proj: ProjectileInstance) => void,
+    thrownObstacles?: ThrownDragonObstacle[],
+    onHitThrown?: (item: ThrownDragonObstacle, proj: ProjectileInstance) => void,
+    enemyProjectiles?: EnemyProjectileInstance[],
+    onHitEnemyProjectile?: (ep: EnemyProjectileInstance, proj: ProjectileInstance) => void
   ): void {
     const maxDist = GAME_CONFIG.COMBAT.PROJECTILE_MAX_DISTANCE;
 
@@ -144,7 +155,18 @@ export class ProjectileManager {
 
       this.updateBoundingBox(proj);
 
-      // 2. Check collision against all active enemies
+      // 2. Check collision against active Dragon boss
+      if (dragon && dragon.isActive && dragon.state !== 'DEFEATED') {
+        if (proj.boundingBox.intersectsBox(dragon.boundingBox)) {
+          if (onHitDragon) {
+            onHitDragon(dragon, proj);
+          }
+          this.deactivate(proj);
+          continue;
+        }
+      }
+
+      // 3. Check collision against active enemies
       let hitEnemy: EnemyInstance | null = null;
       for (let e = 0; e < enemies.length; e++) {
         const enemy = enemies[e];
@@ -156,7 +178,6 @@ export class ProjectileManager {
         }
       }
 
-      // 3. Collision hit event
       if (hitEnemy) {
         if (onHit) {
           onHit(hitEnemy, proj);
@@ -165,7 +186,64 @@ export class ProjectileManager {
         continue;
       }
 
-      // 4. Recycle if traveled beyond maximum range
+      // 4. Check collision against destructible obstacles
+      if (obstacles && onHitObstacle) {
+        let hitObs: ObstacleInstance | null = null;
+        for (let o = 0; o < obstacles.length; o++) {
+          const obs = obstacles[o];
+          if (!obs.isActive || !obs.isDestructible) continue;
+
+          if (proj.boundingBox.intersectsBox(obs.boundingBox)) {
+            hitObs = obs;
+            break;
+          }
+        }
+        if (hitObs) {
+          onHitObstacle(hitObs, proj);
+          this.deactivate(proj);
+          continue;
+        }
+      }
+
+      // 5. Check collision against thrown dragon hazards
+      if (thrownObstacles && onHitThrown) {
+        let hitThrown: ThrownDragonObstacle | null = null;
+        for (let t = 0; t < thrownObstacles.length; t++) {
+          const item = thrownObstacles[t];
+          if (!item.isActive || !item.isDestructible) continue;
+
+          if (proj.boundingBox.intersectsBox(item.boundingBox)) {
+            hitThrown = item;
+            break;
+          }
+        }
+        if (hitThrown) {
+          onHitThrown(hitThrown, proj);
+          this.deactivate(proj);
+          continue;
+        }
+      }
+
+      // 6. Check collision against incoming enemy projectiles (Interception!)
+      if (enemyProjectiles && onHitEnemyProjectile) {
+        let hitEp: EnemyProjectileInstance | null = null;
+        for (let ep = 0; ep < enemyProjectiles.length; ep++) {
+          const enemyProj = enemyProjectiles[ep];
+          if (!enemyProj.isActive) continue;
+
+          if (proj.boundingBox.intersectsBox(enemyProj.boundingBox)) {
+            hitEp = enemyProj;
+            break;
+          }
+        }
+        if (hitEp) {
+          onHitEnemyProjectile(hitEp, proj);
+          this.deactivate(proj);
+          continue;
+        }
+      }
+
+      // 6. Recycle if traveled beyond maximum range
       if (proj.distanceTraveled >= maxDist) {
         this.deactivate(proj);
       }
@@ -177,6 +255,10 @@ export class ProjectileManager {
     proj.targetEnemy = null;
     proj.mesh.visible = false;
     proj.mesh.position.set(0, -100, 0);
+  }
+
+  public destroyProjectile(proj: ProjectileInstance): void {
+    this.deactivate(proj);
   }
 
   public reset(): void {

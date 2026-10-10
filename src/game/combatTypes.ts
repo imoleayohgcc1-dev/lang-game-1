@@ -1,4 +1,4 @@
-export type WeaponType = 'NORMAL' | 'BIG_BULLET' | 'MACHINE_GUN';
+export type WeaponType = 'NORMAL' | 'BIG_BULLET' | 'MACHINE_GUN' | 'SPECIAL_BOMB';
 
 export type PickupType =
   | 'COIN'
@@ -9,7 +9,8 @@ export type PickupType =
   | 'MACHINE_GUN'
   | 'SHIELD'
   | 'MAGNET'
-  | 'COIN_MULTIPLIER';
+  | 'COIN_MULTIPLIER'
+  | 'STAR';
 
 export type PickupRarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC';
 
@@ -24,6 +25,7 @@ export interface WeaponSpec {
   projectileColor: number;
   duration: number; // 0 for normal (permanent), >0 for power-ups
   hudLabel: string;
+  blastRadius?: number;
 }
 
 export interface BombConfig {
@@ -48,6 +50,7 @@ export interface ActiveWeaponState {
   remainingDuration: number;
   maxDuration: number;
   hudLabel?: string;
+  specialShots?: number;
 }
 
 export interface PickupDefinition {
@@ -68,4 +71,22 @@ export interface EnemyDropRule {
   pickupType: PickupType;
   weight: number;
   rarity: PickupRarity;
+}
+
+export type DragonState = 'FLYING' | 'CHARGING' | 'ATTACKING' | 'HIT' | 'DEFEATED' | 'INACTIVE';
+export type DragonAttackPattern = 'SINGLE_LANE' | 'TWO_LANES' | 'DELAYED_ARC' | 'DRAGON_SWEEP' | 'RAPID_BURST';
+
+export interface DragonStatusInfo {
+  isActive: boolean;
+  health: number;
+  maxHealth: number;
+  isCharging: boolean;
+  state: DragonState;
+}
+
+export interface ShieldStatusInfo {
+  isActive: boolean;
+  remainingDuration: number;
+  maxDuration: number;
+  isExpiringSoon: boolean;
 }

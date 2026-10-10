@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GAME_CONFIG, EnemyType } from './constants';
+import { SMALL_RANGED_DAMAGE, MEDIUM_RANGED_DAMAGE } from './combatConfig';
 
 export interface EnemyInstance {
   mesh: THREE.Group;
@@ -18,6 +19,12 @@ export interface EnemyInstance {
   coreMaterial: THREE.MeshStandardMaterial;
   baseMaterial: THREE.MeshStandardMaterial;
   baseColor: number;
+
+  // Ranged attack behavior (Phase 13A)
+  isRanged: boolean;
+  attackCooldown: number;
+  isCharging: boolean;
+  chargeTimer: number;
 }
 
 export class EnemyManager {
@@ -35,10 +42,12 @@ export class EnemyManager {
   // Shared geometries
   private sharedGeos: Record<string, THREE.BufferGeometry> = {};
 
-  // Callbacks for combat events (ready for future language learning hooks)
+  // Callbacks for combat events
   public onEnemySpawned?: (enemy: EnemyInstance) => void;
   public onEnemyHit?: (enemy: EnemyInstance, remainingHealth: number) => void;
   public onEnemyDefeated?: (enemy: EnemyInstance) => void;
+  public onEnemyShoot?: (enemy: EnemyInstance, origin: THREE.Vector3, target: THREE.Vector3, damage: number) => void;
+  public onEnemyWarning?: (enemy: EnemyInstance, laneIndex: number) => void;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -100,8 +109,8 @@ export class EnemyManager {
           mesh: group,
           type,
           laneIndex: 1,
-          health: cfg.HEALTH,
-          maxHealth: cfg.HEALTH,
+          health: cfg.HEALTH * 50,
+          maxHealth: cfg.HEALTH * 50,
           speed: cfg.SPEED,
           scoreReward: cfg.SCORE,
           coinReward: cfg.COINS,
@@ -113,6 +122,10 @@ export class EnemyManager {
           coreMaterial: coreMat,
           baseMaterial: baseMat,
           baseColor: cfg.COLOR,
+          isRanged: type === 'FAST' || type === 'ARMORED',
+          attackCooldown: 2.5,
+          isCharging: false,
+          chargeTimer: 0,
         });
       }
     });
@@ -207,13 +220,19 @@ export class EnemyManager {
     const cfg = GAME_CONFIG.COMBAT.ENEMIES[type];
     const laneX = GAME_CONFIG.LANES[laneIndex];
 
+    const healthMultiplier = 50; // Scaled to Phase 13A 100-HP system (50 / 100 / 250 HP)
+    const baseHp = cfg.HEALTH * healthMultiplier;
     enemy.isActive = true;
     enemy.isDefeated = false;
     enemy.defeatTimer = 0;
     enemy.hitFlashTimer = 0;
     enemy.laneIndex = laneIndex;
-    enemy.health = cfg.HEALTH;
-    enemy.maxHealth = cfg.HEALTH;
+    enemy.health = baseHp;
+    enemy.maxHealth = baseHp;
+    enemy.isRanged = type === 'FAST' || type === 'ARMORED';
+    enemy.attackCooldown = 2.2 + Math.random() * 1.8;
+    enemy.isCharging = false;
+    enemy.chargeTimer = 0;
     enemy.mesh.scale.set(1, 1, 1);
     enemy.mesh.visible = true;
 
@@ -424,6 +443,36 @@ export class EnemyManager {
         // Hover bobbing
         if (enemy.type !== 'ARMORED') {
           enemy.mesh.position.y = 1.3 + Math.sin(this.animClock * 4.0 + i) * 0.18;
+        }
+
+        // Ranged projectile attack behavior (Phase 13A)
+        if (enemy.isRanged && !enemy.isDefeated) {
+          const distAhead = playerPos.z - enemy.mesh.position.z;
+          if (distAhead > 14 && distAhead < 70) {
+            enemy.attackCooldown -= delta;
+
+            // Telegraph charging warning (0.6s before firing)
+            if (enemy.attackCooldown <= 0.6 && !enemy.isCharging) {
+              enemy.isCharging = true;
+              enemy.coreMaterial.emissive.setHex(0xffffff);
+              enemy.coreMaterial.emissiveIntensity = 1.6;
+              this.onEnemyWarning?.(enemy, enemy.laneIndex);
+            }
+
+            // Fire projectile towards runner
+            if (enemy.attackCooldown <= 0) {
+              enemy.isCharging = false;
+              enemy.coreMaterial.emissive.setHex(enemy.baseColor);
+              enemy.coreMaterial.emissiveIntensity = 0.85;
+              enemy.attackCooldown = 3.6 + Math.random() * 2.2;
+
+              const origin = enemy.mesh.position.clone();
+              origin.y += 0.4;
+              origin.z += 0.6;
+              const damage = enemy.type === 'ARMORED' ? MEDIUM_RANGED_DAMAGE : SMALL_RANGED_DAMAGE;
+              this.onEnemyShoot?.(enemy, origin, playerPos, damage);
+            }
+          }
         }
       }
 

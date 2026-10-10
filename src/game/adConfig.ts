@@ -36,7 +36,7 @@ export interface AdConfig {
 export const AD_CONFIG: AdConfig = {
   enabled: true,
   testMode: true,
-  adDurationSeconds: 5, // 5s interactive simulated rewarded ad
+  adDurationSeconds: 4, // 4s fast interactive simulated rewarded ad
   placements: {
     LEVEL_START_REWARD: {
       enabled: true,
@@ -45,7 +45,7 @@ export const AD_CONFIG: AdConfig = {
     REWARDED_RETRY: {
       enabled: true,
       rewardType: 'REVIVE_RUN',
-      maxUsesPerRun: 1,
+      maxUsesPerRun: 99, // Allow repeated rewarded retries upon watching 1 ad
     },
     PRE_LEVEL: {
       enabled: true,

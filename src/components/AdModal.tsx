@@ -42,7 +42,17 @@ export const AdModal: React.FC<AdModalProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [secondsRemaining]);
+
+  // Reward ads play automatically and complete automatically without asking player to click
+  useEffect(() => {
+    if (isCompleted) {
+      const autoProceedTimer = setTimeout(() => {
+        onComplete();
+      }, 600);
+      return () => clearTimeout(autoProceedTimer);
+    }
+  }, [isCompleted, onComplete]);
 
   const getRewardTitle = () => {
     switch (placement) {
@@ -156,19 +166,22 @@ export const AdModal: React.FC<AdModalProps> = ({
           )}
         </div>
 
-        {/* Action Button */}
+        {/* Action Button & Status */}
         {isCompleted ? (
           <button
             onClick={handleClaim}
             className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-extrabold text-sm shadow-xl shadow-emerald-500/25 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
-            <Sparkles className="w-4 h-4 fill-slate-950" />
-            <span>CLAIM REWARD & PROCEED</span>
+            <Sparkles className="w-4 h-4 fill-slate-950 animate-spin" />
+            <span>TRANSMISSION COMPLETE — RESUMING AUTOMATICALLY...</span>
           </button>
         ) : (
           <div className="w-full flex items-center justify-between p-3 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs text-slate-400">
-            <span>Reward available in:</span>
-            <span className="font-mono font-bold text-cyan-300">{secondsRemaining} seconds</span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+              Playing automatically:
+            </span>
+            <span className="font-mono font-bold text-cyan-300">{secondsRemaining}s remaining</span>
           </div>
         )}
 

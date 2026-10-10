@@ -104,6 +104,9 @@ export const PauseModal: React.FC<PauseModalProps> = ({
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>RESTART</span>
+              <span className="text-[9px] px-1.5 py-0.2 bg-black/40 text-amber-300 font-mono font-bold rounded">
+                1 AD
+              </span>
             </button>
 
             {onOpenLevelSelect && (

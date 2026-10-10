@@ -143,11 +143,14 @@ export default function App() {
     }
   };
 
-  const handleRestart = () => {
-    if (gameManagerRef.current) {
+  const handleRestart = useCallback(async () => {
+    if (!gameManagerRef.current) return;
+    // 1 reward ad plays automatically when retrying/restarting
+    const result = await AdManager.getInstance().showRewardedAd('REWARDED_RETRY');
+    if (result.success && result.earnedReward) {
       gameManagerRef.current.restart();
     }
-  };
+  }, []);
 
   const handleHome = () => {
     if (gameManagerRef.current) {
@@ -214,10 +217,15 @@ export default function App() {
     gameManagerRef.current.startLevel(nextLevelNum);
   }, [completedLevelStats]);
 
-  const handleReplayLevel = () => {
+  const handleReplayLevel = useCallback(async () => {
     setCompletedLevelStats(null);
-    gameManagerRef.current?.restartCurrentLevel();
-  };
+    if (!gameManagerRef.current) return;
+    // 1 reward ad plays automatically when replaying
+    const result = await AdManager.getInstance().showRewardedAd('LEVEL_START_REWARD');
+    if (result.success && result.earnedReward) {
+      gameManagerRef.current.restartCurrentLevel();
+    }
+  }, []);
 
   const handleSelectLevel = useCallback(async (levelNumber: number) => {
     setCompletedLevelStats(null);

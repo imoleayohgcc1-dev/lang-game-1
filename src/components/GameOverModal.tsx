@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Trophy, CircleDot, Flame, List, Target, Tv } from 'lucide-react';
+import { Home, Trophy, CircleDot, Flame, List, Target, Tv, RotateCcw } from 'lucide-react';
 import { GameMetrics } from '../game/GameManager';
 
 interface GameOverModalProps {
@@ -117,19 +117,20 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           </div>
         </div>
 
-        {/* Mandatory Rewarded Retry: No normal retry button. Player must watch 1 ad to retry */}
+        {/* Mandatory Rewarded Retry: No normal retry button. When player fails and wants to retry, 1 reward ad plays automatically */}
         <button
           onClick={onAdRetry}
           className="w-full py-3.5 px-5 mb-3 rounded-2xl font-bold text-sm bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:via-orange-400 hover:to-rose-400 text-white shadow-lg shadow-orange-500/25 active:scale-98 transition-all flex items-center justify-center gap-2.5 cursor-pointer touch-manipulation border border-amber-300/40"
         >
-          <Tv className="w-4 h-4" />
+          <RotateCcw className="w-4 h-4" />
           <span>
             {canRewardedRetry
-              ? 'WATCH 1 AD TO RETRY (+50% HP)'
-              : 'WATCH 1 AD TO RETRY LEVEL'}
+              ? 'RETRY MISSION (+50% HP)'
+              : 'RETRY LEVEL'}
           </span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/30 font-mono font-extrabold text-amber-200">
-            1 AD
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/40 font-mono font-extrabold text-amber-300 border border-amber-400/30 flex items-center gap-1">
+            <Tv className="w-3 h-3 text-amber-300" />
+            1 REWARD AD (AUTO)
           </span>
         </button>
 

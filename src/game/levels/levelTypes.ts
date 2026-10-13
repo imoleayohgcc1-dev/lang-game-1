@@ -35,6 +35,16 @@ export interface LevelCheckpoint {
   reached: boolean;
 }
 
+export type WeatherType =
+  | 'SUNNY'
+  | 'CLOUDY'
+  | 'RAIN'
+  | 'FOG'
+  | 'WIND'
+  | 'STORM'
+  | 'SUNSET'
+  | 'NIGHT';
+
 export interface LevelDefinition {
   levelId: string;
   levelNumber: number;
@@ -42,6 +52,10 @@ export interface LevelDefinition {
   description: string;
   environment: EnvironmentTheme;
   dayNight: DayNightMode;
+  weather: WeatherType;
+  weatherIntensity?: number; // 0.0 - 1.0
+  targetDuration: number; // in seconds (e.g. 180s = 3 mins)
+  maximumDuration: number; // in seconds (e.g. 240s = 4 mins hard cap)
   targetDistance: number;
   startingSpeed: number;
   maximumSpeed: number;
@@ -95,8 +109,10 @@ export interface LevelCompletionStats {
   distanceReached: number;
   score: number;
   coinsEarned: number;
+  extraLivesEarned?: number;
   xpEarned: number;
   enemiesDefeated: number;
+  obstaclesDestroyed?: number;
   bombsUsed: number;
   timeElapsedSeconds: number;
   starsEarned: number;
@@ -104,6 +120,7 @@ export interface LevelCompletionStats {
   isNewBest: boolean;
   nextLevelUnlocked: boolean;
   nextLevelNumber?: number;
+  completionStatus?: 'COMPLETED' | 'SURVIVED' | 'TIME_CAP_COMPLETED';
 }
 
 export interface LevelFailedStats {

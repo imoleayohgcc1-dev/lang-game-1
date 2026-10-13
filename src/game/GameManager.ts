@@ -35,7 +35,9 @@ import { WeaponType, ActiveWeaponState, PickupType, DragonStatusInfo, ShieldStat
 import { PlayerHealthManager, DamageSource } from './PlayerHealthManager';
 import { EnemyProjectileManager } from './EnemyProjectileManager';
 import { HumanShooterManager, HumanShooterInstance } from './HumanShooterManager';
+import { WeatherManager } from './WeatherManager';
 import { AdManager } from './AdManager';
+import { COIN_LIFE_REWARD_CONFIG } from './levels/levelConfig';
 import {
   WEAPON_CONFIGS,
   BOMB_CONFIG,
@@ -88,6 +90,10 @@ export interface GameMetrics {
   shieldStatus?: ShieldStatusInfo | null;
   canRewardedRetry?: boolean;
   remainingRewardedRetries?: number;
+  extraLives: number;
+  timeElapsed: number;
+  timeRemaining: number;
+  weather: string;
 }
 
 export type MetricsCallback = (metrics: GameMetrics) => void;
@@ -126,6 +132,13 @@ export class GameManager {
   public cameraController: CameraController;
   public inputManager: InputManager;
   public audioManager: AudioManager;
+  public weatherManager: WeatherManager;
+
+  // Coin Extra Life Milestone System (50 coins = 1 extra life)
+  public qualifyingCoinsInRun: number = 0;
+  public extraLives: number = 0;
+  private lastAwardedLifeMilestone: number = 0;
+  public obstaclesDestroyedCount: number = 0;
 
   // Settings
   public settings: GameSettings;
@@ -206,6 +219,7 @@ export class GameManager {
     this.messageManager = new TemporaryMessageManager();
     this.messageManager.onMessageChanged = () => this.broadcastMetrics();
     this.levelManager = new LevelManager();
+    this.weatherManager = new WeatherManager(this.sceneManager.scene, this.sceneManager, this.audioManager);
     this.cameraController = new CameraController(this.sceneManager.camera);
     this.inputManager = new InputManager(container);
 
@@ -275,6 +289,16 @@ export class GameManager {
 
     // 4. Baseline starting speed
     this.currentSpeed = level.startingSpeed;
+
+    // 5. Active 3D Weather & Atmosphere (Levels 1-15 distinct atmospheres)
+    if (this.weatherManager) {
+      this.weatherManager.applyLevelWeather(
+        level.weather || 'SUNNY',
+        level.environment,
+        level.dayNight,
+        level.weatherIntensity ?? 0.5
+      );
+    }
   }
 
   private loadHighScore(): number {
@@ -321,8 +345,12 @@ export class GameManager {
       }
     });
 
-    // 3. Coin collection hook
+    // 3. Coin collection hook with 50-coin Extra Life Milestone system
     this.coinManager.onCoinCollected = (coin: CoinInstance) => {
+      // Physical coin pickup tracking (milestone based on actual qualifying coin pickups, not currency multiplier)
+      this.qualifyingCoinsInRun += 1;
+
+      // Currency payout
       const multiplier = (this.powerUpManager.isMultiplierActive() || this.pickupManager.isMultiplierActive()) ? 2 : 1;
       const earnedCoins = 1 * multiplier;
       this.coins += earnedCoins;
@@ -331,11 +359,28 @@ export class GameManager {
       this.audioManager.playCoinSound();
       this.vfxManager.triggerCoinCollect(coin.mesh.position);
 
+      // Check 50-coin Extra Life Milestone
+      const coinsReq = COIN_LIFE_REWARD_CONFIG.coinsRequired;
+      const milestoneTarget = this.lastAwardedLifeMilestone + coinsReq;
+      if (this.qualifyingCoinsInRun >= milestoneTarget) {
+        this.lastAwardedLifeMilestone = Math.floor(this.qualifyingCoinsInRun / coinsReq) * coinsReq;
+        if (this.extraLives < COIN_LIFE_REWARD_CONFIG.maximumStoredLives) {
+          this.extraLives += COIN_LIFE_REWARD_CONFIG.extraLivesAwarded;
+        }
+        this.audioManager.playExtraLifeMilestoneSound();
+        this.showMessage(`EXTRA LIFE +1 (❤️ x${this.extraLives})`, 2200, 'success');
+      }
+
       if (this.coins >= 50) {
         this.achievementManager.unlock('COIN_COLLECTOR');
       }
 
       this.broadcastMetrics();
+    };
+
+    // Obstacle destruction tracking
+    this.obstacleManager.onDestroyed = () => {
+      this.obstaclesDestroyedCount++;
     };
 
     // 4. PowerUp collection hook
@@ -453,6 +498,43 @@ export class GameManager {
     };
 
     this.playerHealthManager.onDeath = () => {
+      // 1. Check if player possesses an Extra Life earned from 50-coin milestones!
+      if (this.extraLives > 0) {
+        this.extraLives -= 1;
+        this.showMessage(`EXTRA LIFE USED (Remaining: ${this.extraLives})`, 2500, 'success');
+        this.audioManager.playPowerUpSound();
+
+        // Instant revive: restore 50% max lifespan
+        const restoreAmount = Math.max(25, Math.round(this.playerHealthManager.maxHealth * 0.5));
+        this.playerHealthManager.reset(restoreAmount, this.playerHealthManager.maxHealth);
+        this.health = this.playerHealthManager.currentHealth;
+        this.maxHealth = this.playerHealthManager.maxHealth;
+
+        // Grant revival invulnerability (2.5s) & energy globe shield (7s)
+        this.player.setInvulnerable(2.5);
+        this.playerHealthManager.activateShield(SHIELD_DURATION);
+
+        // Clear nearby hostile projectiles & clear immediate obstacles in front
+        this.enemyProjectileManager.reset();
+        const playerZ = this.player.position.z;
+        for (const obs of this.obstacleManager.pool) {
+          if (obs.isActive && obs.mesh.position.z < playerZ && obs.mesh.position.z > playerZ - 25) {
+            this.obstacleManager.damageObstacle(obs, 9999);
+          }
+        }
+
+        // Keep player running seamlessly!
+        this.player.state = 'RUNNING';
+        this.player.isGrounded = true;
+        this.player.verticalVelocity = 0;
+        this.player.mesh.position.y = 0;
+        this.player.mesh.rotation.set(0, 0, 0);
+
+        this.broadcastMetrics();
+        return;
+      }
+
+      // 2. Normal Game Over flow when no extra lives remain
       this.levelManager.failLevel({
         distance: this.distance,
         score: this.score,
@@ -661,17 +743,23 @@ export class GameManager {
     // 10. State changes and music transitions
     this.stateManager.subscribe((newState) => {
       if (newState === 'PLAYING') {
+        this.levelManager.resumeLevel();
         if (this.dragonManager && this.dragonManager.hasActiveDragon()) {
           this.audioManager.playDragonMusic();
         } else {
           this.audioManager.startAmbientMusic();
         }
-      } else if (newState === 'READY') {
-        this.audioManager.playMenuMusic();
-      } else if (newState === 'PAUSED') {
-        this.audioManager.stopAmbientMusic();
-      } else if (newState === 'GAME_OVER') {
-        this.audioManager.musicManager.playGameOverMusic();
+      } else {
+        this.levelManager.pauseLevel();
+        if (newState === 'READY') {
+          this.audioManager.playMenuMusic();
+        } else if (newState === 'PAUSED') {
+          this.audioManager.stopAmbientMusic();
+        } else if (newState === 'GAME_OVER') {
+          this.audioManager.musicManager.playGameOverMusic();
+        } else if (newState === 'LESSON_COMPLETE') {
+          this.audioManager.musicManager.playVictoryMusic();
+        }
       }
     });
   }
@@ -1009,6 +1097,10 @@ export class GameManager {
     this.isLevelCompleteTriggered = false;
     this.tookDamageInLevel = false;
     this.enemiesDefeatedCount = 0;
+    this.qualifyingCoinsInRun = 0;
+    this.lastAwardedLifeMilestone = 0;
+    this.extraLives = 0;
+    this.obstaclesDestroyedCount = 0;
     this.levelManager.startLevel(this.levelManager.currentLevel.levelNumber);
     this.applyLevelConfig(this.levelManager.currentLevel);
     this.broadcastMetrics();
@@ -1060,6 +1152,10 @@ export class GameManager {
     this.isLevelCompleteTriggered = false;
     this.tookDamageInLevel = false;
     this.enemiesDefeatedCount = 0;
+    this.qualifyingCoinsInRun = 0;
+    this.lastAwardedLifeMilestone = 0;
+    this.extraLives = 0;
+    this.obstaclesDestroyedCount = 0;
     this.levelManager.startLevel(this.levelManager.currentLevel.levelNumber);
     this.applyLevelConfig(this.levelManager.currentLevel);
     this.broadcastMetrics();
@@ -1283,6 +1379,11 @@ export class GameManager {
       // Update visual effects & speed lines
       this.vfxManager.update(delta, this.currentSpeed, this.player.position.z);
 
+      // Update 3D Weather effects (rain/wind particles & storm lightning)
+      if (this.weatherManager) {
+        this.weatherManager.update(delta, this.player.position.z, this.currentSpeed);
+      }
+
       // Level Progression: Advance distance and check completion conditions
       const levelProgress = this.levelManager.update(this.distance, delta, {
         score: this.score,
@@ -1293,12 +1394,20 @@ export class GameManager {
 
       if (levelProgress.isComplete && !this.isLevelCompleteTriggered) {
         this.isLevelCompleteTriggered = true;
+
+        // Transition state to LESSON_COMPLETE, freeze hazards and pause timer
+        this.stateManager.setState('LESSON_COMPLETE');
+        this.levelManager.pauseLevel();
+        this.enemyProjectileManager.reset();
+
         const completionStats = this.levelManager.completeLevel({
           distance: this.distance,
           score: this.score,
           coins: this.coins,
+          extraLivesEarned: this.extraLives,
           xp: Math.floor(this.score * 0.1),
           enemiesDefeated: this.enemiesDefeatedCount,
+          obstaclesDestroyed: this.obstaclesDestroyedCount,
           bombsUsed: 0,
           tookDamage: this.tookDamageInLevel,
         });
@@ -1398,6 +1507,10 @@ export class GameManager {
         },
         canRewardedRetry: this.canUseRewardedRetry(),
         remainingRewardedRetries: this.getRemainingRewardedRetries(),
+        extraLives: this.extraLives,
+        timeElapsed: this.levelManager.getTimeElapsed(),
+        timeRemaining: this.levelManager.getTimeRemaining(),
+        weather: this.levelManager.currentLevel.weather || 'SUNNY',
       });
     }
   }
@@ -1491,6 +1604,7 @@ export class GameManager {
     this.coinManager.dispose();
     this.trackManager.dispose();
     this.audioManager.dispose();
+    this.weatherManager?.dispose();
     this.sceneManager.dispose();
   }
 }

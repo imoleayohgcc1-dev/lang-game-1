@@ -231,27 +231,132 @@ export class AudioManager {
   }
 
   /**
-   * Play Energy Shield absorbing damage
+   * Play Extra Life Milestone Reward Fanfare (50-coin milestone)
    */
-  public playShieldAbsorbSound(): void {
+  public playExtraLifeMilestoneSound(): void {
     if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
     try {
       const now = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
+      // Vibrant celebratory chime: C5, E5, G5, C6, E6
+      const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5];
+      notes.forEach((freq, idx) => {
+        if (!this.ctx || !this.sfxGain) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const start = now + idx * 0.07;
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, start);
+
+        gain.gain.setValueAtTime(0.4, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.35);
+
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+
+        osc.start(start);
+        osc.stop(start + 0.35);
+      });
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  // Rain ambience node references
+  private rainNoiseNode: AudioBufferSourceNode | null = null;
+  private rainGainNode: GainNode | null = null;
+
+  /**
+   * Start loop of subtle rainy weather atmosphere
+   */
+  public startRainAmbience(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    if (this.rainNoiseNode) return; // Already running
+
+    try {
+      const bufferSize = this.ctx.sampleRate * 2;
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * 0.15;
+      }
+
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+      noise.loop = true;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 1100;
+      filter.Q.value = 1.2;
+
       const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
 
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(650, now);
-      osc.frequency.exponentialRampToValueAtTime(120, now + 0.22);
-
-      gain.gain.setValueAtTime(0.4, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-
-      osc.connect(gain);
+      noise.connect(filter);
+      filter.connect(gain);
       gain.connect(this.sfxGain);
 
-      osc.start(now);
-      osc.stop(now + 0.25);
+      noise.start();
+      this.rainNoiseNode = noise;
+      this.rainGainNode = gain;
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * Stop rain ambience sound
+   */
+  public stopRainAmbience(): void {
+    if (this.rainNoiseNode) {
+      try {
+        this.rainNoiseNode.stop();
+        this.rainNoiseNode.disconnect();
+      } catch {}
+      this.rainNoiseNode = null;
+    }
+    if (this.rainGainNode) {
+      try {
+        this.rainGainNode.disconnect();
+      } catch {}
+      this.rainGainNode = null;
+    }
+  }
+
+  /**
+   * Play gentle distant thunder rumble for storm weather
+   */
+  public playThunderSound(): void {
+    if (this.isMuted || !this.isSoundEnabled || !this.ctx || !this.sfxGain) return;
+    try {
+      const now = this.ctx.currentTime;
+      const bufferSize = this.ctx.sampleRate * 1.5;
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1);
+      }
+
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(200, now);
+      filter.frequency.exponentialRampToValueAtTime(45, now + 1.4);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(0.3, now + 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 1.4);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain);
+
+      noise.start(now);
+      noise.stop(now + 1.5);
     } catch {
       // Audio fallback
     }

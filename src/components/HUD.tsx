@@ -163,6 +163,19 @@ export const HUD: React.FC<HUDProps> = ({
               </div>
             </div>
 
+            {/* Extra Lives Pill (Earned every 50 coins) */}
+            {metrics.extraLives > 0 && (
+              <div
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-rose-950/90 border border-rose-500/70 text-rose-300 shadow-[0_0_8px_rgba(244,63,94,0.4)] animate-pulse"
+                title={`Extra Lives: ${metrics.extraLives} (Automatic revive on lethal damage)`}
+              >
+                <Heart className="w-3 h-3 text-rose-400 fill-rose-400" />
+                <span className="text-[10px] sm:text-xs font-bold font-mono-nums">
+                  +{metrics.extraLives} LIFE
+                </span>
+              </div>
+            )}
+
             {/* Protective Shield Forcefield Status */}
             {metrics.shieldStatus?.isActive && (
               <div
@@ -275,12 +288,12 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
         </div>
 
-        {/* Row 2: Level Progress Indicator */}
+        {/* Row 2: Level Progress Indicator with compact timer & weather */}
         {metrics.levelProgress && (
           <div
             id="LEVEL_PROGRESS_HUD"
             data-testid="level-progress-hud"
-            className="flex items-center justify-between gap-2 px-3 py-1 bg-slate-950/85 backdrop-blur-md rounded-xl border border-indigo-900/60 text-[10px] sm:text-xs shadow-sm"
+            className="flex items-center justify-between gap-2 px-3 py-1 bg-slate-950/85 backdrop-blur-md rounded-xl border border-indigo-900/60 text-[10px] sm:text-xs shadow-sm flex-wrap"
           >
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="px-1.5 py-0.5 rounded bg-indigo-500/25 text-indigo-300 font-extrabold text-[9px] sm:text-[10px] uppercase tracking-wider border border-indigo-500/40 shrink-0">
@@ -289,14 +302,31 @@ export const HUD: React.FC<HUDProps> = ({
               <span className="text-white font-bold truncate">
                 {metrics.levelProgress.levelName}
               </span>
+              {metrics.weather && (
+                <span className="hidden sm:inline-block text-[9px] px-1.5 py-0.5 rounded bg-slate-800/90 text-cyan-300 border border-slate-700/80 uppercase font-mono font-semibold">
+                  {metrics.weather}
+                </span>
+              )}
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              {/* Compact Level Session Timer (Target 180s, Hard Cap 240s) */}
+              <div
+                className="flex items-center gap-1 font-mono text-[9px] sm:text-[11px] font-bold text-cyan-300 bg-cyan-950/60 border border-cyan-500/40 px-2 py-0.5 rounded-md"
+                title={`Level Elapsed: ${Math.floor(metrics.timeElapsed / 60)}:${(metrics.timeElapsed % 60).toString().padStart(2, '0')} | Max: 04:00`}
+              >
+                <span className="text-slate-400 text-[8px] sm:text-[9px] uppercase">TIME LEFT:</span>
+                <span className="text-cyan-200">
+                  {Math.floor(metrics.timeRemaining / 60).toString().padStart(2, '0')}:
+                  {(metrics.timeRemaining % 60).toString().padStart(2, '0')}
+                </span>
+              </div>
+
               <div className="flex items-center gap-1.5 font-mono text-slate-300">
                 <span className="font-bold text-[10px] sm:text-xs text-indigo-200">
                   {metrics.levelProgress.currentDistance} / {metrics.levelProgress.targetDistance} m
                 </span>
-                <div className="w-16 sm:w-24 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div className="w-14 sm:w-20 h-1.5 bg-slate-800 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-all duration-300"
                     style={{ width: `${Math.min(100, metrics.levelProgress.progressPercentage)}%` }}

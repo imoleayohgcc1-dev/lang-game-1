@@ -63,6 +63,10 @@ export default function App() {
     bombs: 3,
     maxBombs: 5,
     activePowerUps: [],
+    extraLives: 0,
+    timeElapsed: 0,
+    timeRemaining: 180,
+    weather: 'SUNNY',
   });
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
@@ -394,6 +398,7 @@ export default function App() {
           onReplayLevel={handleReplayLevel}
           onOpenLevelSelect={() => setIsLevelSelectOpen(true)}
           onContinueRunning={handleContinueRunningLevel}
+          onHome={handleHome}
         />
       )}
 

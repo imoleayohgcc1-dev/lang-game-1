@@ -12,6 +12,10 @@ import {
   Flame,
   Crosshair,
   Tv,
+  Clock,
+  Heart,
+  Shield,
+  Home,
 } from 'lucide-react';
 import { LevelCompletionStats } from '../game/levels/levelTypes';
 
@@ -21,6 +25,7 @@ interface LevelCompleteModalProps {
   onReplayLevel: () => void;
   onOpenLevelSelect?: () => void;
   onContinueRunning?: () => void;
+  onHome?: () => void;
 }
 
 export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
@@ -29,7 +34,14 @@ export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
   onReplayLevel,
   onOpenLevelSelect,
   onContinueRunning,
+  onHome,
 }) => {
+  const formatTime = (totalSeconds: number) => {
+    const m = Math.floor(Math.max(0, totalSeconds) / 60);
+    const s = Math.floor(Math.max(0, totalSeconds) % 60);
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200"
@@ -38,34 +50,38 @@ export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
       aria-labelledby="level-complete-title"
     >
       <div className="w-full max-w-md bg-slate-900 border border-indigo-500/40 rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col items-center text-center my-auto">
-        {/* Decorative Top Pill */}
-        <div className="w-12 h-1.5 bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 rounded-full mb-3" />
-
-        {/* Level Cleared Tag */}
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/40 text-indigo-300 text-xs font-extrabold uppercase tracking-widest mb-1.5 shadow-sm">
-          <Trophy className="w-3.5 h-3.5 text-amber-400" />
-          <span>LEVEL {stats.levelNumber} COMPLETED!</span>
+        {/* Trophy Header Icon */}
+        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-br from-amber-400/20 via-indigo-500/20 to-cyan-400/20 border border-amber-400/40 flex items-center justify-center mb-3 shadow-lg shadow-amber-500/10">
+          <Trophy className="w-8 h-8 sm:w-10 sm:h-10 text-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.6)]" />
         </div>
 
-        {/* Level Name */}
+        {/* Title & Level Name */}
         <h2
           id="level-complete-title"
-          className="text-2xl sm:text-3xl font-display font-extrabold text-white mb-2"
+          className="text-xl sm:text-2xl font-black text-white tracking-wide uppercase leading-tight"
         >
-          {stats.levelName}
+          {stats.completionStatus === 'TIME_CAP_COMPLETED' || stats.completionStatus === 'SURVIVED'
+            ? 'SECTOR SURVIVED'
+            : 'SECTOR COMPLETED'}
         </h2>
+        <div className="flex items-center gap-2 mt-1 mb-3">
+          <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-extrabold text-xs uppercase tracking-wider border border-indigo-500/40">
+            LEVEL {stats.levelNumber}
+          </span>
+          <span className="text-sm font-semibold text-slate-300">{stats.levelName}</span>
+        </div>
 
-        {/* 3-Star Rating Display */}
-        <div className="flex items-center justify-center gap-2 mb-4">
-          {[1, 2, 3].map((starNum) => {
-            const isEarned = starNum <= stats.starsEarned;
+        {/* 3-Star Rating */}
+        <div className="flex items-center justify-center gap-3 mb-4">
+          {[1, 2, 3].map((starIdx) => {
+            const isEarned = starIdx <= stats.starsEarned;
             return (
               <div
-                key={starNum}
-                className={`p-2 rounded-2xl border transition-all duration-300 ${
+                key={starIdx}
+                className={`p-2 rounded-2xl border transition-all ${
                   isEarned
-                    ? 'bg-amber-500/20 border-amber-400/60 shadow-[0_0_15px_rgba(251,191,36,0.4)] scale-110'
-                    : 'bg-slate-800/40 border-slate-700/50 opacity-40 scale-95'
+                    ? 'bg-amber-500/20 border-amber-400/50 shadow-md shadow-amber-500/20 scale-105'
+                    : 'bg-slate-950/40 border-slate-800 opacity-40'
                 }`}
               >
                 <Star
@@ -89,7 +105,7 @@ export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
         ) : (
           <div className="w-full flex items-center justify-center gap-2 py-2 px-3 mb-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold shadow-sm">
             <Tv className="w-4 h-4 text-amber-400" />
-            <span>LEVEL {stats.nextLevelNumber || stats.levelNumber + 1}: 2 REWARD ADS TO UNLOCK</span>
+            <span>LEVEL {stats.nextLevelNumber || stats.levelNumber + 1}: 1 REWARD AD TO UNLOCK</span>
           </div>
         )}
 
@@ -128,23 +144,23 @@ export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
           </div>
         </div>
 
-        {/* Stats Grid */}
+        {/* Comprehensive Stats Grid (Requirement 15) */}
         <div className="w-full grid grid-cols-3 gap-2 mb-4 p-3 bg-slate-950/60 rounded-2xl border border-slate-800/80 text-left">
+          {/* Time Taken */}
+          <div className="flex flex-col">
+            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+              <Clock className="w-3 h-3 text-cyan-400" /> Time
+            </span>
+            <span className="text-sm font-bold text-cyan-300 font-mono">
+              {formatTime(stats.timeElapsedSeconds)}
+            </span>
+          </div>
+
           {/* Distance */}
           <div className="flex flex-col">
             <span className="text-[10px] text-slate-400 font-medium">Distance</span>
             <span className="text-sm font-bold text-cyan-300 font-mono">
               {stats.distanceReached}m
-            </span>
-          </div>
-
-          {/* Combat Enemies */}
-          <div className="flex flex-col">
-            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
-              <Crosshair className="w-3 h-3 text-rose-400" /> Enemies
-            </span>
-            <span className="text-sm font-bold text-rose-300 font-mono">
-              {stats.enemiesDefeated || 0}
             </span>
           </div>
 
@@ -157,9 +173,39 @@ export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
               {stats.score.toLocaleString()}
             </span>
           </div>
+
+          {/* Enemies Defeated */}
+          <div className="flex flex-col pt-1.5 border-t border-slate-800/60">
+            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+              <Crosshair className="w-3 h-3 text-rose-400" /> Enemies
+            </span>
+            <span className="text-sm font-bold text-rose-300 font-mono">
+              {stats.enemiesDefeated || 0}
+            </span>
+          </div>
+
+          {/* Obstacles Destroyed */}
+          <div className="flex flex-col pt-1.5 border-t border-slate-800/60">
+            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+              <Shield className="w-3 h-3 text-purple-400" /> Hazards
+            </span>
+            <span className="text-sm font-bold text-purple-300 font-mono">
+              {stats.obstaclesDestroyed || 0}
+            </span>
+          </div>
+
+          {/* Extra Lives Earned */}
+          <div className="flex flex-col text-right pt-1.5 border-t border-slate-800/60">
+            <span className="text-[10px] text-slate-400 font-medium flex items-center justify-end gap-1">
+              <Heart className="w-3 h-3 text-rose-400" /> Extra Lives
+            </span>
+            <span className="text-sm font-bold text-rose-300 font-mono">
+              +{stats.extraLivesEarned || 0}
+            </span>
+          </div>
         </div>
 
-        {/* Actions */}
+        {/* Actions: NEXT LEVEL, RETRY LEVEL, HOME */}
         <div className="w-full flex flex-col gap-2">
           {/* Primary Action: NEXT LEVEL */}
           <button
@@ -173,15 +219,15 @@ export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
             <ArrowRight className="w-5 h-5" />
           </button>
 
-          {/* Secondary Actions Row */}
-          <div className="grid grid-cols-2 gap-2">
+          {/* Secondary Actions: RETRY LEVEL, LEVELS, HOME */}
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={onReplayLevel}
-              className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-semibold text-xs rounded-xl border border-slate-700/80 active:scale-98 transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation"
+              className="py-2.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-semibold text-xs rounded-xl border border-slate-700/80 active:scale-98 transition-all flex items-center justify-center gap-1 cursor-pointer touch-manipulation"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>REPLAY</span>
-              <span className="text-[9px] px-1.5 py-0.2 bg-black/40 text-amber-300 font-mono font-bold rounded">
+              <span className="text-[8px] px-1 py-0.2 bg-black/40 text-amber-300 font-mono font-bold rounded">
                 1 AD
               </span>
             </button>
@@ -189,10 +235,20 @@ export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
             {onOpenLevelSelect && (
               <button
                 onClick={onOpenLevelSelect}
-                className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-semibold text-xs rounded-xl border border-slate-700/80 active:scale-98 transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation"
+                className="py-2.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-semibold text-xs rounded-xl border border-slate-700/80 active:scale-98 transition-all flex items-center justify-center gap-1 cursor-pointer touch-manipulation"
               >
                 <List className="w-3.5 h-3.5" />
                 <span>LEVELS</span>
+              </button>
+            )}
+
+            {onHome && (
+              <button
+                onClick={onHome}
+                className="py-2.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-semibold text-xs rounded-xl border border-slate-700/80 active:scale-98 transition-all flex items-center justify-center gap-1 cursor-pointer touch-manipulation"
+              >
+                <Home className="w-3.5 h-3.5" />
+                <span>HOME</span>
               </button>
             )}
           </div>

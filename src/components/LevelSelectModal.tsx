@@ -168,6 +168,14 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
                       )}
                       {lvl.environment}
                     </span>
+                    {lvl.weather && (
+                      <>
+                        <span>·</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono text-[10px] uppercase font-bold border border-slate-700">
+                          {lvl.weather}
+                        </span>
+                      </>
+                    )}
                   </div>
 
                   {/* Action Button: 1-click start with automatic 1 reward ad for changing level */}

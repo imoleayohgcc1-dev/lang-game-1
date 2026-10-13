@@ -12,6 +12,7 @@ import {
   LEVEL_PROGRESS_STORAGE_KEY,
   generateProceduralLevel,
   ADS_REQUIRED_TO_UNLOCK_LEVEL,
+  TARGET_LEVEL_DURATION_SECONDS,
   MAX_LEVEL_DURATION_SECONDS,
 } from './levelConfig';
 
@@ -139,7 +140,7 @@ export class LevelManager {
     return generateProceduralLevel(levelNumber);
   }
 
-  public getAllLevels(limit: number = 8): LevelDefinition[] {
+  public getAllLevels(limit: number = 15): LevelDefinition[] {
     const levels: LevelDefinition[] = [...INITIAL_LEVELS];
     const highestUnlocked = Math.max(1, ...this.progress.unlockedLevels);
     const targetCount = Math.max(limit, highestUnlocked + 1);
@@ -214,6 +215,25 @@ export class LevelManager {
     return this.currentLevel;
   }
 
+  public pauseLevel(): void {
+    this.isLevelActive = false;
+  }
+
+  public resumeLevel(): void {
+    if (!this.isCompleted) {
+      this.isLevelActive = true;
+    }
+  }
+
+  public getTimeElapsed(): number {
+    return Math.round(this.levelElapsedTime);
+  }
+
+  public getTimeRemaining(): number {
+    const maxDur = this.currentLevel.maximumDuration || MAX_LEVEL_DURATION_SECONDS;
+    return Math.max(0, maxDur - Math.round(this.levelElapsedTime));
+  }
+
   /**
    * Frame-by-frame distance and level progress update
    */
@@ -246,21 +266,36 @@ export class LevelManager {
       }
     }
 
-    // Max duration cap: each level never exceeds 3-5 minutes max (capped at 300s)
-    const isTimeLimitReached = this.levelElapsedTime >= MAX_LEVEL_DURATION_SECONDS;
-    const isDistReached = currentDist >= targetDist || isTimeLimitReached;
+    // 1. Normal objective completion
     const req = this.currentLevel.completionRequirements;
-    const isCoinsMet = isTimeLimitReached || (req.requiredCoins || 0) <= stats.coins;
-    const isEnemiesMet = isTimeLimitReached || (req.requiredEnemiesDefeated || 0) <= stats.enemiesDefeated;
+    const isCoinsMet = (req.requiredCoins || 0) <= stats.coins;
+    const isEnemiesMet = (req.requiredEnemiesDefeated || 0) <= stats.enemiesDefeated;
+    const isDistMet = currentDist >= targetDist;
+    const isNormalObjectiveMet = isDistMet && isCoinsMet && isEnemiesMet;
 
-    const isComplete = isDistReached && isCoinsMet && isEnemiesMet;
+    // 2. Target duration threshold (180 seconds default)
+    const targetDuration = this.currentLevel.targetDuration || TARGET_LEVEL_DURATION_SECONDS;
+    const isTargetDurationReached = this.levelElapsedTime >= targetDuration;
+
+    // 3. Hard maximum gameplay limit (240 seconds default) - guaranteed deterministic finish
+    const maxDuration = this.currentLevel.maximumDuration || MAX_LEVEL_DURATION_SECONDS;
+    const isHardMaxDurationReached = this.levelElapsedTime >= maxDuration;
+
+    let isComplete = false;
+    if (isHardMaxDurationReached) {
+      isComplete = true;
+    } else if (isNormalObjectiveMet) {
+      isComplete = true;
+    } else if (isTargetDurationReached && (isDistMet || isCoinsMet || currentDist >= targetDist * 0.85)) {
+      isComplete = true;
+    }
 
     this.runtimeProgress = {
       levelNumber: this.currentLevel.levelNumber,
       levelName: this.currentLevel.levelName,
       currentDistance: currentDist,
       targetDistance: targetDist,
-      progressPercentage: isTimeLimitReached ? 100 : progressPct,
+      progressPercentage: isHardMaxDurationReached ? 100 : progressPct,
       isComplete,
       score: stats.score,
       coinsEarned: stats.coins,
@@ -285,6 +320,9 @@ export class LevelManager {
     enemiesDefeated: number;
     bombsUsed?: number;
     tookDamage?: boolean;
+    extraLivesEarned?: number;
+    obstaclesDestroyed?: number;
+    completionStatus?: 'COMPLETED' | 'SURVIVED' | 'TIME_CAP_COMPLETED';
   }): LevelCompletionStats {
     this.isCompleted = true;
     this.isLevelActive = false;
@@ -369,8 +407,10 @@ export class LevelManager {
       distanceReached: Math.round(finalStats.distance),
       score: finalStats.score,
       coinsEarned: totalCoins,
+      extraLivesEarned: finalStats.extraLivesEarned || 0,
       xpEarned: totalXP,
       enemiesDefeated: finalStats.enemiesDefeated,
+      obstaclesDestroyed: finalStats.obstaclesDestroyed || 0,
       bombsUsed: finalStats.bombsUsed || 0,
       timeElapsedSeconds: Math.round(this.levelElapsedTime),
       starsEarned,
@@ -378,6 +418,7 @@ export class LevelManager {
       isNewBest,
       nextLevelUnlocked,
       nextLevelNumber: nextLevelNum,
+      completionStatus: finalStats.completionStatus || 'COMPLETED',
     };
 
     if (nextLevelUnlocked) {

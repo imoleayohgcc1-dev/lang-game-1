@@ -314,7 +314,6 @@ export class PickupManager {
     const lookAhead = 180;
     while (this.nextSpawnZ > playerZ - lookAhead) {
       const candidates: PickupType[] = [
-        'COIN',
         'HEALTH',
         'BOMB',
         'BIG_BULLET',

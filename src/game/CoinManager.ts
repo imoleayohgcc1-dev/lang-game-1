@@ -9,6 +9,7 @@ export interface CoinInstance {
   laneIndex: number;
   zPos: number;
   bobOffset: number;
+  isCollected: boolean;
 }
 
 export type CoinPattern = 'STRAIGHT' | 'CURVE' | 'ZIGZAG' | 'JUMP_PATH';
@@ -16,7 +17,7 @@ export type CoinPattern = 'STRAIGHT' | 'CURVE' | 'ZIGZAG' | 'JUMP_PATH';
 export class CoinManager {
   private scene: THREE.Scene;
   private coinPool: CoinInstance[] = [];
-  private poolSize = 48; // increased pool size for multi-lane formations
+  private poolSize = 48; // pool size for multi-lane formations
   private animTime = 0;
   private coinCountPerPattern = 4;
 
@@ -82,12 +83,13 @@ export class CoinManager {
         laneIndex: 1,
         zPos: 0,
         bobOffset: Math.random() * Math.PI * 2,
+        isCollected: false,
       });
     }
   }
 
   /**
-   * Spawn a single coin
+   * Spawn a single coin at a stationary world position
    */
   public spawnCoin(laneIndex: number, zPos: number, altitude: number = 1.1): CoinInstance | null {
     const coin = this.coinPool.find((c) => !c.isActive);
@@ -96,9 +98,12 @@ export class CoinManager {
     const clampedLane = Math.max(0, Math.min(2, laneIndex));
     const xPos = GAME_CONFIG.LANES[clampedLane];
     coin.isActive = true;
+    coin.isCollected = false;
     coin.laneIndex = clampedLane;
     coin.zPos = zPos;
     coin.baseY = altitude;
+
+    // Rigid initial world placement
     coin.mesh.position.set(xPos, coin.baseY, zPos);
     coin.mesh.scale.set(1, 1, 1);
     coin.mesh.visible = true;
@@ -166,21 +171,21 @@ export class CoinManager {
   }
 
   /**
-   * Pull active coins towards player when Magnet power-up is active
+   * Pull active coins towards player ONLY when Magnet power-up is active
    */
-  public attractCoins(playerPos: THREE.Vector3, delta: number, radius: number = 14.0): void {
-    const pullSpeed = 24.0; // units/sec
+  public attractCoins(playerPos: THREE.Vector3, delta: number, radius: number = 12.0): void {
+    const pullSpeed = 22.0; // units/sec
 
     for (let i = 0; i < this.coinPool.length; i++) {
       const coin = this.coinPool[i];
-      if (!coin.isActive) continue;
+      if (!coin.isActive || coin.isCollected) continue;
 
-      const pPos = new THREE.Vector3(playerPos.x, playerPos.y + 1.1, playerPos.z);
+      const pPos = new THREE.Vector3(playerPos.x, playerPos.y + 1.0, playerPos.z);
       const cPos = coin.mesh.position;
       const dist = pPos.distanceTo(cPos);
 
       if (dist < radius) {
-        // Smooth suction towards player
+        // Smooth suction towards player when Magnet is active
         const dir = pPos.sub(cPos).normalize();
         const step = dir.multiplyScalar(pullSpeed * delta);
         coin.mesh.position.add(step);
@@ -188,6 +193,12 @@ export class CoinManager {
     }
   }
 
+  /**
+   * Frame update:
+   * - Coins remain strictly stationary in world coordinates (except spinning & subtle bobbing).
+   * - Magnet power-up must remain optional (only attract when isMagnetActive is explicitly true).
+   * - Collision-based collection: depends on player's actual lane, forward contact, and jumping/grounded state.
+   */
   public update(delta: number, playerPos: THREE.Vector3, isMagnetActive: boolean = false): void {
     this.animTime += delta;
 
@@ -197,33 +208,60 @@ export class CoinManager {
 
     for (let i = 0; i < this.coinPool.length; i++) {
       const coin = this.coinPool[i];
-      if (!coin.isActive) continue;
+      if (!coin.isActive || coin.isCollected) continue;
 
-      // 1. Visual animation: Spin and float bob
+      // 1. Visual animation: Spin
       coin.mesh.rotation.y += delta * GAME_CONFIG.COIN_SPIN_SPEED;
+
+      // When Magnet is INACTIVE, enforce rigid stationary world coordinates:
+      // Coin must not drift, lerp, or move towards the player in X or Z.
       if (!isMagnetActive) {
         const bob = Math.sin(this.animTime * GAME_CONFIG.COIN_BOB_SPEED + coin.bobOffset) * GAME_CONFIG.COIN_BOB_HEIGHT;
         coin.mesh.position.y = coin.baseY + bob;
+        coin.mesh.position.x = GAME_CONFIG.LANES[coin.laneIndex];
+        coin.mesh.position.z = coin.zPos;
       }
 
-      // 2. Collection Collision Check with player
+      // 2. Accurate Collision-Based Coin Collection
       const dx = Math.abs(coin.mesh.position.x - playerPos.x);
       const dz = Math.abs(coin.mesh.position.z - playerPos.z);
-      const dy = Math.abs(coin.mesh.position.y - (playerPos.y + 1.0));
 
-      if (dx < 1.15 && dz < 1.4 && dy < 1.9) {
-        this.collectCoin(coin);
-        continue;
+      // A coin in another lane must NOT be collected merely because it is close in forward distance.
+      // Player lateral collision threshold: must be within 0.85m of coin lane center.
+      const isSameLane = dx <= 0.85;
+
+      // Forward contact point threshold: player reaches the coin within 0.95m.
+      const isAtContactPoint = dz <= 0.95;
+
+      if (isSameLane && isAtContactPoint) {
+        // Height check:
+        // If coin is elevated (requiring a jump, e.g. baseY > 1.6m):
+        // Player MUST be in the air (playerPos.y >= 0.55m) to collect it.
+        if (coin.baseY > 1.6) {
+          if (playerPos.y >= 0.55) {
+            this.collectCoin(coin);
+            continue;
+          }
+        } else {
+          // Low/ground coin:
+          // Player collects if on ground or low; if jumping very high (playerPos.y > 1.8m), they jump over it.
+          if (playerPos.y <= 1.8) {
+            this.collectCoin(coin);
+            continue;
+          }
+        }
       }
 
-      // 3. Recycle if coin is far behind the player
-      if (coin.mesh.position.z > playerPos.z + 15) {
+      // 3. Recycle if coin is far behind the player (player runs forward along -Z, so coin is behind when position.z > playerPos.z + 15)
+      if (coin.mesh.position.z > playerPos.z + 16) {
         this.deactivateCoin(coin);
       }
     }
   }
 
   private collectCoin(coin: CoinInstance): void {
+    if (coin.isCollected) return;
+    coin.isCollected = true;
     this.deactivateCoin(coin);
     if (this.onCoinCollected) {
       this.onCoinCollected(coin);
@@ -232,6 +270,7 @@ export class CoinManager {
 
   public deactivateCoin(coin: CoinInstance): void {
     coin.isActive = false;
+    coin.isCollected = false;
     coin.mesh.visible = false;
     coin.mesh.position.set(0, -100, 0);
   }

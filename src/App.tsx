@@ -16,9 +16,19 @@ import { LevelCompleteModal } from './components/LevelCompleteModal';
 import { LevelSelectModal } from './components/LevelSelectModal';
 import { AdModal } from './components/AdModal';
 import { WebGLFallback } from './components/WebGLFallback';
+import { SupabaseAuthModal } from './components/SupabaseAuthModal';
+import { OnlinePresenceModal } from './components/OnlinePresenceModal';
 import { LevelCompletionStats } from './game/levels/levelTypes';
 import { AdManager } from './game/AdManager';
 import { AdPlacement } from './game/adConfig';
+import { CloudSaveManager } from './supabase/cloudSaveManager';
+import { OnlinePresenceManager } from './supabase/onlinePresenceManager';
+import { OnboardingManager } from './supabase/onboardingManager';
+import { MatchPreferencesManager } from './supabase/matchPreferencesManager';
+import { OnboardingModal } from './components/OnboardingModal';
+import { ProfileCompletionModal } from './components/ProfileCompletionModal';
+import { MatchPreferencesModal } from './components/MatchPreferencesModal';
+import { DiscoveryModal } from './components/DiscoveryModal';
 import { Award } from 'lucide-react';
 
 export default function App() {
@@ -71,6 +81,12 @@ export default function App() {
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isLevelSelectOpen, setIsLevelSelectOpen] = useState<boolean>(false);
+  const [isSupabaseAuthOpen, setIsSupabaseAuthOpen] = useState<boolean>(false);
+  const [isOnlinePresenceOpen, setIsOnlinePresenceOpen] = useState<boolean>(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
+  const [isProfileCompletionOpen, setIsProfileCompletionOpen] = useState<boolean>(false);
+  const [isMatchPreferencesOpen, setIsMatchPreferencesOpen] = useState<boolean>(false);
+  const [isDiscoveryOpen, setIsDiscoveryOpen] = useState<boolean>(false);
   const [completedLevelStats, setCompletedLevelStats] = useState<LevelCompletionStats | null>(null);
   const [webGLError, setWebGLError] = useState<string | null>(null);
 
@@ -91,10 +107,47 @@ export default function App() {
 
       gm.stateManager.subscribe((newState) => {
         setGameState(newState);
+
+        // Update Realtime Player Presence based on state
+        const currentLvl = gm.levelManager.getCurrentLevel().levelNumber;
+        if (newState === 'PLAYING') {
+          OnlinePresenceManager.getInstance().updatePlayerActivity('RUNNING', currentLvl);
+        } else if (newState === 'PAUSED') {
+          OnlinePresenceManager.getInstance().updatePlayerActivity('PAUSED', currentLvl);
+        } else if (newState === 'READY') {
+          OnlinePresenceManager.getInstance().updatePlayerActivity('LOBBY');
+        } else if (newState === 'GAME_OVER') {
+          OnlinePresenceManager.getInstance().updatePlayerActivity('GAME_OVER', currentLvl);
+
+          // Non-blocking asynchronous failed run recording to Supabase
+          const runProg = gm.levelManager.runtimeProgress;
+          CloudSaveManager.getInstance().recordLevelRun({
+            run_id: `run_over_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            level_id: currentLvl,
+            score: gm.score,
+            distance: gm.distance,
+            duration_seconds: runProg.timeElapsed || 0,
+            coins_collected: gm.coins,
+            enemies_defeated: runProg.enemiesDefeated || 0,
+            completed: false,
+          });
+        }
       });
 
       gm.onLevelCompleted = (stats) => {
         setCompletedLevelStats(stats);
+
+        // Non-blocking asynchronous completed run recording to Supabase
+        CloudSaveManager.getInstance().recordLevelRun({
+          run_id: `run_lvl${stats.levelNumber}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          level_id: stats.levelNumber,
+          score: stats.score,
+          distance: stats.distanceReached,
+          duration_seconds: stats.timeElapsedSeconds,
+          coins_collected: stats.coinsEarned,
+          enemies_defeated: stats.enemiesDefeated,
+          completed: true,
+        });
       };
 
       gm.achievementManager.onAchievementUnlocked = (ach) => {
@@ -120,6 +173,10 @@ export default function App() {
   useEffect(() => {
     initGame();
 
+    // Initialize Supabase Online Presence and sync progression if already authenticated
+    OnlinePresenceManager.getInstance().init();
+    CloudSaveManager.getInstance().syncProgression();
+
     return () => {
       if (gameManagerRef.current) {
         gameManagerRef.current.dispose();
@@ -130,10 +187,59 @@ export default function App() {
 
   // Handlers
   const handlePlay = () => {
+    // If onboarding is not completed, start the 3-question flow
+    if (!OnboardingManager.getInstance().isOnboardingCompleted()) {
+      setIsOnboardingOpen(true);
+      return;
+    }
+
     if (gameManagerRef.current) {
       gameManagerRef.current.startGame();
     }
   };
+
+  const handleOnboardingComplete = () => {
+    setIsOnboardingOpen(false);
+    if (gameManagerRef.current) {
+      // Start Level 1 directly after answering onboarding questions
+      gameManagerRef.current.startLevel(1);
+    }
+  };
+
+  const handleProceedToLevel2 = useCallback(async () => {
+    setIsProfileCompletionOpen(false);
+
+    // Phase 2: Check if match preferences are set before advancing to Level 2
+    if (!MatchPreferencesManager.getInstance().hasCompletedPreferences()) {
+      setIsMatchPreferencesOpen(true);
+      return;
+    }
+
+    setCompletedLevelStats(null);
+    if (!gameManagerRef.current) return;
+
+    // Direct the player toward Level 2 after required information has been saved
+    const nextLevelNum = 2;
+    const result = await AdManager.getInstance().showRewardedAd('LEVEL_UNLOCK_REWARD');
+    if (result.success && result.earnedReward) {
+      gameManagerRef.current.levelManager.recordAdWatchedForLevel(nextLevelNum);
+    }
+    gameManagerRef.current.startLevel(nextLevelNum);
+  }, []);
+
+  const handlePreferencesSaved = useCallback(async () => {
+    setIsMatchPreferencesOpen(false);
+    setCompletedLevelStats(null);
+    if (!gameManagerRef.current) return;
+
+    // Start Level 2 after match preferences are confirmed and saved
+    const nextLevelNum = 2;
+    const result = await AdManager.getInstance().showRewardedAd('LEVEL_UNLOCK_REWARD');
+    if (result.success && result.earnedReward) {
+      gameManagerRef.current.levelManager.recordAdWatchedForLevel(nextLevelNum);
+    }
+    gameManagerRef.current.startLevel(nextLevelNum);
+  }, []);
 
   const handlePause = () => {
     if (gameManagerRef.current) {
@@ -209,6 +315,19 @@ export default function App() {
 
   const handleNextLevel = useCallback(async () => {
     const stats = completedLevelStats;
+
+    // After completing Level 1, prompt to complete social profile if not yet completed
+    if (stats?.levelNumber === 1 && !OnboardingManager.getInstance().isProfileCompleted()) {
+      setIsProfileCompletionOpen(true);
+      return;
+    }
+
+    // After completing Level 1, prompt to set match preferences if not yet completed
+    if (stats?.levelNumber === 1 && !MatchPreferencesManager.getInstance().hasCompletedPreferences()) {
+      setIsMatchPreferencesOpen(true);
+      return;
+    }
+
     setCompletedLevelStats(null);
     if (!gameManagerRef.current) return;
     const nextLevelNum = (stats?.levelNumber || 1) + 1;
@@ -258,7 +377,24 @@ export default function App() {
     const unsub = AdManager.getInstance().subscribeState((active) => {
       setActiveAd(active);
     });
-    return unsub;
+
+    // Hidden developer diagnostic trigger (Ctrl+Shift+D or URL param ?dev=true)
+    // Kept strictly away from ordinary player buttons and menus
+    const handleDevKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        setIsSupabaseAuthOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleDevKeyDown);
+    if (typeof window !== 'undefined' && window.location.search.includes('dev=true')) {
+      setIsSupabaseAuthOpen(true);
+    }
+
+    return () => {
+      unsub();
+      window.removeEventListener('keydown', handleDevKeyDown);
+    };
   }, []);
 
   const handleWatchAdToRetry = useCallback(async () => {
@@ -289,6 +425,33 @@ export default function App() {
       gameManagerRef.current.levelManager.recordAdWatchedForLevel(levelNumber);
       gameManagerRef.current.startLevel(levelNumber);
     }
+  }, []);
+
+  // Resolve accurate level progression even prior to 3D canvas initialization
+  const getLevelProgress = useCallback(() => {
+    if (gameManagerRef.current) {
+      return gameManagerRef.current.levelManager.progress;
+    }
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem('action_runner_level_progress');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          return {
+            unlockedLevels: Array.isArray(parsed.unlockedLevels) ? parsed.unlockedLevels : [1],
+            completedLevels: Array.isArray(parsed.completedLevels) ? parsed.completedLevels : [],
+            currentLevelNumber: parsed.currentLevelNumber || 1,
+          };
+        }
+      }
+    } catch {
+      // Ignore
+    }
+    return {
+      unlockedLevels: [1],
+      completedLevels: [],
+      currentLevelNumber: 1,
+    };
   }, []);
 
   return (
@@ -339,6 +502,16 @@ export default function App() {
               : undefined
           }
           onOpenLevelSelect={() => setIsLevelSelectOpen(true)}
+          onOpenPresence={() => setIsOnlinePresenceOpen(true)}
+          onOpenOnboarding={() => setIsOnboardingOpen(true)}
+          onOpenPreferences={() => setIsMatchPreferencesOpen(true)}
+          onOpenDiscovery={() => setIsDiscoveryOpen(true)}
+          highestUnlockedLevel={
+            Math.max(
+              ...(getLevelProgress().unlockedLevels || [1]),
+              metrics.levelProgress?.levelNumber || 1
+            )
+          }
         />
       )}
 
@@ -388,6 +561,8 @@ export default function App() {
         settings={settings}
         onUpdateSettings={handleUpdateSettings}
         achievements={achievements}
+        onOpenPreferences={() => setIsMatchPreferencesOpen(true)}
+        onOpenDiscovery={() => setIsDiscoveryOpen(true)}
       />
 
       {/* Level Complete Results Modal */}
@@ -399,6 +574,18 @@ export default function App() {
           onOpenLevelSelect={() => setIsLevelSelectOpen(true)}
           onContinueRunning={handleContinueRunningLevel}
           onHome={handleHome}
+          requiresProfileCompletion={
+            completedLevelStats.levelNumber === 1 &&
+            !OnboardingManager.getInstance().isProfileCompleted()
+          }
+          onOpenProfileCompletion={() => setIsProfileCompletionOpen(true)}
+          requiresPreferences={
+            completedLevelStats.levelNumber === 1 &&
+            OnboardingManager.getInstance().isProfileCompleted() &&
+            !MatchPreferencesManager.getInstance().hasCompletedPreferences()
+          }
+          onOpenPreferences={() => setIsMatchPreferencesOpen(true)}
+          onOpenDiscovery={() => setIsDiscoveryOpen(true)}
         />
       )}
 
@@ -438,6 +625,67 @@ export default function App() {
           }}
         />
       )}
+
+      {/* Supabase Authentication & Cloud Progression Modal (Phase 16) */}
+      <SupabaseAuthModal
+        isOpen={isSupabaseAuthOpen}
+        onClose={() => setIsSupabaseAuthOpen(false)}
+        onOpenPresence={() => setIsOnlinePresenceOpen(true)}
+      />
+
+      {/* Online Presence Lobby Modal (Phase 16) */}
+      <OnlinePresenceModal
+        isOpen={isOnlinePresenceOpen}
+        onClose={() => setIsOnlinePresenceOpen(false)}
+      />
+
+      {/* Onboarding Questionnaire Modal (Phase 1) */}
+      <OnboardingModal
+        isOpen={isOnboardingOpen}
+        onComplete={handleOnboardingComplete}
+      />
+
+      {/* Social Profile Completion Modal (Phase 1, after Level 1) */}
+      <ProfileCompletionModal
+        isOpen={isProfileCompletionOpen}
+        onProceedToLevel2={handleProceedToLevel2}
+      />
+
+      {/* Match Preferences & Romantic Discovery Settings Modal (Phase 2) */}
+      <MatchPreferencesModal
+        isOpen={isMatchPreferencesOpen}
+        onClose={() => setIsMatchPreferencesOpen(false)}
+        onProceedAfterSave={handlePreferencesSaved}
+        isInitialSetup={
+          completedLevelStats?.levelNumber === 1 ||
+          !MatchPreferencesManager.getInstance().hasCompletedPreferences()
+        }
+      />
+
+      {/* Royal Discovery & Real Player Profiles Modal (Phase 3) */}
+      <DiscoveryModal
+        isOpen={isDiscoveryOpen}
+        onClose={() => setIsDiscoveryOpen(false)}
+        onOpenPreferences={() => {
+          setIsDiscoveryOpen(false);
+          setIsMatchPreferencesOpen(true);
+        }}
+        onOpenProfileCompletion={() => {
+          setIsDiscoveryOpen(false);
+          setIsProfileCompletionOpen(true);
+        }}
+        onStartLevel={(lvl) => {
+          setIsDiscoveryOpen(false);
+          handleSelectLevel(lvl);
+        }}
+        highestUnlockedLevel={
+          Math.max(
+            ...(getLevelProgress().unlockedLevels || [1]),
+            metrics.levelProgress?.levelNumber || 1
+          )
+        }
+        completedLevels={getLevelProgress().completedLevels || []}
+      />
     </main>
   );
 }

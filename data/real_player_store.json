@@ -1,0 +1,193 @@
+{
+  "profiles": {
+    "seed-player-aurelia-01": {
+      "id": "seed-player-aurelia-01",
+      "display_name": "Princess Aurelia",
+      "avatar_url": "princess_crown",
+      "age": 22,
+      "country": "United Kingdom",
+      "bio": "Sector 5 speedrunner seeking an honorable prince with courage and a love for deep starry night conversations.",
+      "religion": "Christian",
+      "onboarding_completed": true,
+      "profile_completed": true,
+      "current_level": 5,
+      "highest_unlocked_level": 5,
+      "best_score": 48900,
+      "total_distance": 7420,
+      "total_enemies_defeated": 185,
+      "total_coins_collected": 890,
+      "upgrade_levels": {
+        "damage": 2,
+        "health": 3,
+        "bombs": 1,
+        "shield": 2
+      },
+      "created_at": "2026-10-11T11:41:31.110Z",
+      "updated_at": "2026-10-16T11:48:20.048Z"
+    },
+    "seed-player-valerius-02": {
+      "id": "seed-player-valerius-02",
+      "display_name": "Prince Valerius",
+      "avatar_url": "prince_crown",
+      "age": 24,
+      "country": "Canada",
+      "bio": "Royal knight of the northern peaks. Ready to conquer dangerous obstacles and find a kind, spirited princess.",
+      "religion": "Christian",
+      "onboarding_completed": true,
+      "profile_completed": true,
+      "current_level": 4,
+      "highest_unlocked_level": 5,
+      "best_score": 41200,
+      "total_distance": 6100,
+      "total_enemies_defeated": 142,
+      "total_coins_collected": 670,
+      "upgrade_levels": {
+        "damage": 2,
+        "health": 2,
+        "bombs": 2,
+        "shield": 1
+      },
+      "created_at": "2026-10-09T11:41:31.110Z",
+      "updated_at": "2026-10-16T11:47:45.048Z"
+    },
+    "seed-player-zephyrine-03": {
+      "id": "seed-player-zephyrine-03",
+      "display_name": "Princess Zephyrine",
+      "avatar_url": "mystic_queen",
+      "age": 21,
+      "country": "France",
+      "bio": "Nimble runner across the crystal kingdom. Faith, art, and adventure guide every royal leap.",
+      "religion": "Spiritual",
+      "onboarding_completed": true,
+      "profile_completed": true,
+      "current_level": 4,
+      "highest_unlocked_level": 4,
+      "best_score": 36800,
+      "total_distance": 5300,
+      "total_enemies_defeated": 110,
+      "total_coins_collected": 540,
+      "upgrade_levels": {
+        "damage": 1,
+        "health": 2,
+        "bombs": 1,
+        "shield": 1
+      },
+      "created_at": "2026-10-13T11:41:31.110Z",
+      "updated_at": "2026-10-16T11:45:35.048Z"
+    },
+    "seed-player-keith-04": {
+      "id": "seed-player-keith-04",
+      "display_name": "Prince Keith",
+      "avatar_url": "solar_champion",
+      "age": 26,
+      "country": "United States",
+      "bio": "Runner and castle strategist. Looking for someone loyal, witty, and ready to share royal victories.",
+      "religion": "Christian",
+      "onboarding_completed": true,
+      "profile_completed": true,
+      "current_level": 6,
+      "highest_unlocked_level": 6,
+      "best_score": 59400,
+      "total_distance": 9800,
+      "total_enemies_defeated": 240,
+      "total_coins_collected": 1250,
+      "upgrade_levels": {
+        "damage": 3,
+        "health": 3,
+        "bombs": 2,
+        "shield": 2
+      },
+      "created_at": "2026-10-06T11:41:31.110Z",
+      "updated_at": "2026-10-16T11:41:05.048Z"
+    },
+    "seed-player-seraphina-05": {
+      "id": "seed-player-seraphina-05",
+      "display_name": "Princess Seraphina",
+      "avatar_url": "princess_crown",
+      "age": 25,
+      "country": "Australia",
+      "bio": "Astrophysics enthusiast and golden runner. Looking for meaningful connection and deep conversation.",
+      "religion": "Catholic",
+      "onboarding_completed": true,
+      "profile_completed": true,
+      "current_level": 5,
+      "highest_unlocked_level": 5,
+      "best_score": 45700,
+      "total_distance": 7200,
+      "total_enemies_defeated": 160,
+      "total_coins_collected": 810,
+      "upgrade_levels": {
+        "damage": 2,
+        "health": 3,
+        "bombs": 1,
+        "shield": 2
+      },
+      "created_at": "2026-10-12T11:41:31.110Z",
+      "updated_at": "2026-10-16T11:27:05.048Z"
+    },
+    "seed-player-daichi-06": {
+      "id": "seed-player-daichi-06",
+      "display_name": "Prince Daichi",
+      "avatar_url": "brave_knight",
+      "age": 27,
+      "country": "Japan",
+      "bio": "Discipline, honor, and endurance. Seeking a gentle and brave princess to conquer the kingdom together.",
+      "religion": "Buddhist",
+      "onboarding_completed": true,
+      "profile_completed": true,
+      "current_level": 5,
+      "highest_unlocked_level": 5,
+      "best_score": 51200,
+      "total_distance": 8300,
+      "total_enemies_defeated": 195,
+      "total_coins_collected": 980,
+      "upgrade_levels": {
+        "damage": 2,
+        "health": 2,
+        "bombs": 2,
+        "shield": 3
+      },
+      "created_at": "2026-10-04T11:41:31.110Z",
+      "updated_at": "2026-10-16T09:49:05.048Z"
+    },
+    "seed-player-fatima-07": {
+      "id": "seed-player-fatima-07",
+      "display_name": "Princess Fatima",
+      "avatar_url": "mystic_queen",
+      "age": 23,
+      "country": "United Arab Emirates",
+      "bio": "Royal palace designer and precision runner. Values sincerity, kindness, and devotion to family.",
+      "religion": "Muslim",
+      "onboarding_completed": true,
+      "profile_completed": true,
+      "current_level": 4,
+      "highest_unlocked_level": 4,
+      "best_score": 39500,
+      "total_distance": 5900,
+      "total_enemies_defeated": 125,
+      "total_coins_collected": 720,
+      "upgrade_levels": {
+        "damage": 1,
+        "health": 2,
+        "bombs": 1,
+        "shield": 2
+      },
+      "created_at": "2026-10-08T11:41:31.110Z",
+      "updated_at": "2026-10-16T07:49:05.048Z"
+    }
+  },
+  "invitations": {
+    "inv_1792151349087_etkw5jv": {
+      "id": "inv_1792151349087_etkw5jv",
+      "sender_id": "current-player",
+      "recipient_id": "seed-player-aurelia-01",
+      "status": "accepted",
+      "created_at": "2026-10-16T11:49:09.087Z",
+      "updated_at": "2026-10-16T11:49:16.727Z",
+      "expires_at": "2026-10-23T11:49:09.087Z",
+      "is_read": true,
+      "responded_at": "2026-10-16T11:49:16.727Z"
+    }
+  },
+  "blocks": []
+}

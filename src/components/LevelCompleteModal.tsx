@@ -16,6 +16,7 @@ import {
   Heart,
   Shield,
   Home,
+  Crown,
 } from 'lucide-react';
 import { LevelCompletionStats } from '../game/levels/levelTypes';
 
@@ -26,6 +27,11 @@ interface LevelCompleteModalProps {
   onOpenLevelSelect?: () => void;
   onContinueRunning?: () => void;
   onHome?: () => void;
+  requiresProfileCompletion?: boolean;
+  onOpenProfileCompletion?: () => void;
+  requiresPreferences?: boolean;
+  onOpenPreferences?: () => void;
+  onOpenDiscovery?: () => void;
 }
 
 export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
@@ -35,6 +41,11 @@ export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
   onOpenLevelSelect,
   onContinueRunning,
   onHome,
+  requiresProfileCompletion,
+  onOpenProfileCompletion,
+  requiresPreferences,
+  onOpenPreferences,
+  onOpenDiscovery,
 }) => {
   const formatTime = (totalSeconds: number) => {
     const m = Math.floor(Math.max(0, totalSeconds) / 60);
@@ -205,19 +216,61 @@ export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
           </div>
         </div>
 
-        {/* Actions: NEXT LEVEL, RETRY LEVEL, HOME */}
+        {/* Special Phase 3 Milestone: Level 3 Conquered -> Level 4 & Royal Discovery Unlocked! */}
+        {stats.levelNumber === 3 && onOpenDiscovery && (
+          <div className="w-full bg-gradient-to-r from-rose-950/70 via-slate-900/90 to-indigo-950/70 border border-amber-400/50 rounded-2xl p-3 mb-2 text-center shadow-lg shadow-amber-500/10">
+            <div className="text-xs font-black text-amber-300 flex items-center justify-center gap-1.5 uppercase tracking-wide">
+              <Crown className="w-4 h-4 text-amber-300" />
+              <span>Royal Discovery Unlocked!</span>
+              <Sparkles className="w-3.5 h-3.5 text-rose-300" />
+            </div>
+            <p className="text-[11px] text-slate-300 mt-1 mb-2 leading-relaxed">
+              Congratulations! Reaching Level 4 unlocks the royal discovery feed to meet real princes and princesses.
+            </p>
+            <button
+              onClick={onOpenDiscovery}
+              className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-rose-500 via-pink-600 to-indigo-600 hover:from-rose-400 hover:via-pink-500 hover:to-indigo-500 text-white font-extrabold text-xs shadow-md shadow-rose-500/25 flex items-center justify-center gap-1.5 active:scale-98 transition-all cursor-pointer"
+            >
+              <Heart className="w-3.5 h-3.5 fill-white" />
+              <span>EXPLORE ROYAL DISCOVERY</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Actions: NEXT LEVEL / COMPLETE PROFILE / SET PREFERENCES, RETRY LEVEL, HOME */}
         <div className="w-full flex flex-col gap-2">
-          {/* Primary Action: NEXT LEVEL */}
-          <button
-            onClick={onNextLevel}
-            className="w-full py-3.5 px-4 rounded-2xl shadow-lg active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation font-bold text-base text-white bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-500 hover:from-indigo-400 hover:via-cyan-400 hover:to-emerald-400 shadow-cyan-500/25"
-          >
-            <span>NEXT LEVEL</span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/35 font-mono text-cyan-200 border border-cyan-400/30">
-              1 REWARD AD
-            </span>
-            <ArrowRight className="w-5 h-5" />
-          </button>
+          {/* Primary Action */}
+          {requiresProfileCompletion && onOpenProfileCompletion ? (
+            <button
+              onClick={onOpenProfileCompletion}
+              className="w-full py-3.5 px-4 rounded-2xl shadow-xl active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation font-black text-base text-white bg-gradient-to-r from-amber-500 via-orange-500 to-indigo-600 hover:from-amber-400 hover:via-orange-400 hover:to-indigo-500 shadow-amber-500/25 border-t border-amber-300/40"
+            >
+              <Sparkles className="w-5 h-5 text-amber-200" />
+              <span>COMPLETE PROFILE & GO TO LEVEL 2</span>
+              <ArrowRight className="w-5 h-5" />
+            </button>
+          ) : requiresPreferences && onOpenPreferences ? (
+            <button
+              onClick={onOpenPreferences}
+              className="w-full py-3.5 px-4 rounded-2xl shadow-xl active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation font-black text-base text-white bg-gradient-to-r from-rose-500 via-amber-500 to-indigo-600 hover:from-rose-400 hover:via-amber-400 hover:to-indigo-500 shadow-rose-500/25 border-t border-rose-300/40"
+            >
+              <Heart className="w-5 h-5 text-rose-200 fill-rose-200" />
+              <span>SET MATCH PREFERENCES & GO TO LEVEL 2</span>
+              <ArrowRight className="w-5 h-5" />
+            </button>
+          ) : (
+            <button
+              onClick={onNextLevel}
+              className="w-full py-3.5 px-4 rounded-2xl shadow-lg active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation font-bold text-base text-white bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-500 hover:from-indigo-400 hover:via-cyan-400 hover:to-emerald-400 shadow-cyan-500/25"
+            >
+              <span>NEXT LEVEL</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/35 font-mono text-cyan-200 border border-cyan-400/30">
+                1 REWARD AD
+              </span>
+              <ArrowRight className="w-5 h-5" />
+            </button>
+          )}
 
           {/* Secondary Actions: RETRY LEVEL, LEVELS, HOME */}
           <div className="grid grid-cols-3 gap-2">

@@ -24,6 +24,7 @@ import {
   GAME_CONFIG,
 } from '../game/constants';
 import { Achievement } from '../game/AchievementManager';
+import { Cloud, Heart, Crown } from 'lucide-react';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -31,6 +32,8 @@ interface SettingsModalProps {
   settings: GameSettings;
   onUpdateSettings: (newSettings: GameSettings) => void;
   achievements?: Achievement[];
+  onOpenPreferences?: () => void;
+  onOpenDiscovery?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -39,6 +42,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
   onUpdateSettings,
   achievements = [],
+  onOpenPreferences,
+  onOpenDiscovery,
 }) => {
   const [activeTab, setActiveTab] = useState<'SETTINGS' | 'CONTROLS' | 'ACHIEVEMENTS'>('SETTINGS');
 
@@ -123,6 +128,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             Trophies
           </button>
+          {onOpenPreferences && (
+            <button
+              onClick={() => {
+                onClose();
+                onOpenPreferences();
+              }}
+              className="flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer text-rose-300 hover:text-white bg-rose-950/60 border border-rose-500/30 flex items-center justify-center gap-1"
+              title="Romantic Discovery & Match Preferences"
+            >
+              <Heart className="w-3.5 h-3.5 text-rose-400" />
+              <span>Matches</span>
+            </button>
+          )}
+          {onOpenDiscovery && (
+            <button
+              onClick={() => {
+                onClose();
+                onOpenDiscovery();
+              }}
+              className="flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer text-amber-300 hover:text-white bg-amber-950/60 border border-amber-500/30 flex items-center justify-center gap-1"
+              title="Find Your Prince or Princess"
+            >
+              <Crown className="w-3.5 h-3.5 text-amber-400" />
+              <span>Discovery</span>
+            </button>
+          )}
         </div>
 
         {/* Tab Contents */}

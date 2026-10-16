@@ -28,6 +28,8 @@ export interface GameSettings {
   controlSensitivity: number; // 1.0 = normal, 1.3 = fast
 }
 
+export const HIGH_SCORE_KEY = 'action_runner_high_score';
+
 export const DEFAULT_SETTINGS: GameSettings = {
   musicEnabled: true,
   soundEnabled: true,
@@ -43,9 +45,9 @@ export const DEFAULT_SETTINGS: GameSettings = {
 };
 
 export const GAME_CONFIG = {
-  TITLE: 'CYBER RUNNER 3D',
-  SUBTITLE: 'Run · Shoot · Blast · Survive',
-  VERSION: '1.0.0-phase12',
+  TITLE: 'PRINCE AND PRINCESS RESCUE',
+  SUBTITLE: 'Run. Rescue. Find Your Prince or Princess.',
+  VERSION: '1.0.0-phase1',
 
   // Gameplay & Physics
   BASE_SPEED: 18.0, // units per second

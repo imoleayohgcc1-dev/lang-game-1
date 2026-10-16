@@ -15,10 +15,12 @@ import {
   Sparkles,
   Bomb,
   Flame,
+  Mail,
 } from 'lucide-react';
 import { GameMetrics } from '../game/GameManager';
 import { PowerUpType } from '../game/constants';
 import { TemporaryMessage } from './TemporaryMessage';
+import { InvitationManager } from '../supabase/invitationManager';
 
 interface HUDProps {
   metrics: GameMetrics;
@@ -30,6 +32,7 @@ interface HUDProps {
   onShoot: (side?: 'LEFT' | 'RIGHT' | 'AUTO') => void;
   onBomb: () => void;
   onReload: () => void;
+  onOpenInvitations?: () => void;
 }
 
 export const HUD: React.FC<HUDProps> = ({
@@ -42,7 +45,17 @@ export const HUD: React.FC<HUDProps> = ({
   onShoot,
   onBomb,
   onReload,
+  onOpenInvitations,
 }) => {
+  const [unreadInvitations, setUnreadInvitations] = React.useState<number>(0);
+
+  React.useEffect(() => {
+    const unsub = InvitationManager.getInstance().subscribe((_invs, unread) => {
+      setUnreadInvitations(unread);
+    });
+    return unsub;
+  }, []);
+
   const getPowerUpIcon = (type: PowerUpType | string) => {
     switch (type) {
       case 'MAGNET':
@@ -277,6 +290,19 @@ export const HUD: React.FC<HUDProps> = ({
               <span className="text-slate-600">·</span>
               <span>{metrics.speed} km/h</span>
             </div>
+
+            {/* Phase 4: Non-blocking invitation indicator */}
+            {unreadInvitations > 0 && onOpenInvitations && (
+              <button
+                onClick={onOpenInvitations}
+                aria-label="New chat invitation waiting"
+                className="p-2 sm:p-2.5 bg-rose-950/90 hover:bg-rose-900 border border-rose-500 text-white rounded-2xl shadow-lg active:scale-95 transition-all touch-manipulation cursor-pointer flex items-center justify-center animate-bounce"
+                title="You have an invitation waiting! Tap to view."
+              >
+                <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-rose-300" />
+                <span className="sr-only">New Invitation</span>
+              </button>
+            )}
 
             <button
               onClick={onPause}
